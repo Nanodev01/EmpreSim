@@ -1,0 +1,24 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: simulando-emprendedores:latest
+    container_name: simulando-emprendedores
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5111}:5111"
+    environment:
+      - NODE_ENV=production
+      - PORT=5111
+      - DATABASE_URL=file:/app/data/dev.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+    volumes:
+      - simulando_data:/app/data
+
+volumes:
+  simulando_data:
+    driver: local

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -113,6 +113,7 @@ export default function GameDashboardPage() {
       }
     }
     fetchGame();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
   const fetchGame = async (targetTeamId?: string) => {
@@ -496,40 +497,54 @@ export default function GameDashboardPage() {
     return palette[idx % palette.length];
   };
 
-  if (loading || !game) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
-        <RefreshCw className="w-8 h-8 animate-spin text-emerald-500 mb-4" />
-        <p className="text-sm font-medium">Cargando datos del mercado y equipos...</p>
-      </div>
-    );
-  }
-
   // Parsear la configuración del caso para el período activo
-  let casoConfig: CasoPeriodoConfig | null = null;
-  try {
-    const caso: CasoSimulacion = JSON.parse(game.configCasoJson);
-    casoConfig = caso.periodos[game.periodoActual] || caso.periodos[0];
-  } catch {}
+  const casoConfig = useMemo<CasoPeriodoConfig | null>(() => {
+    if (!game?.configCasoJson) return null;
+    try {
+      const caso: CasoSimulacion = JSON.parse(game.configCasoJson);
+      return caso.periodos[game.periodoActual] || caso.periodos[0];
+    } catch {
+      return null;
+    }
+  }, [game?.configCasoJson, game?.periodoActual]);
 
-  const humanTeams = game.teams.filter((t: any) => t.esHumano);
-  const botTeams = game.teams.filter((t: any) => !t.esHumano);
-  const activeTeam = game.teams.find((t: any) => t.id === selectedTeamId) || humanTeams[0] || game.teams[0];
-  const activeReportTeam = game.teams.find((t: any) => t.id === selectedReportTeamId) || activeTeam;
-  const activeFeedbackTeam = game.teams.find((t: any) => t.id === selectedFeedbackTeamId) || activeTeam;
+  const { humanTeams, botTeams } = useMemo(() => {
+    if (!game?.teams) return { humanTeams: [], botTeams: [] };
+    const human = game.teams.filter((t: any) => t.esHumano);
+    const bot = game.teams.filter((t: any) => !t.esHumano);
+    return { humanTeams: human, botTeams: bot };
+  }, [game?.teams]);
+
+  const activeTeam = useMemo(() => {
+    if (!game?.teams || game.teams.length === 0) return null;
+    return game.teams.find((t: any) => t.id === selectedTeamId) || humanTeams[0] || game.teams[0];
+  }, [game?.teams, selectedTeamId, humanTeams]);
+
+  const activeReportTeam = useMemo(() => {
+    if (!game?.teams || game.teams.length === 0) return activeTeam;
+    return game.teams.find((t: any) => t.id === selectedReportTeamId) || activeTeam;
+  }, [game?.teams, selectedReportTeamId, activeTeam]);
+
+  const activeFeedbackTeam = useMemo(() => {
+    if (!game?.teams || game.teams.length === 0) return activeTeam;
+    return game.teams.find((t: any) => t.id === selectedFeedbackTeamId) || activeTeam;
+  }, [game?.teams, selectedFeedbackTeamId, activeTeam]);
 
   // Contador de equipos listos para la ronda
-  const equiposListosCount = humanTeams.filter((t: any) => 
-    t.decisions?.some((d: any) => d.periodo === game.periodoActual)
-  ).length;
-  const todosListos = equiposListosCount === humanTeams.length;
+  const equiposListosCount = useMemo(() => {
+    return humanTeams.filter((t: any) => 
+      t.decisions?.some((d: any) => d.periodo === game?.periodoActual)
+    ).length;
+  }, [humanTeams, game?.periodoActual]);
 
-  // Calculadora Preventiva para el equipo activo
-  let calculoPreventivo: any = null;
-  if (casoConfig && activeTeam) {
+  const todosListos = humanTeams.length > 0 && equiposListosCount === humanTeams.length;
+
+  // Calculadora Preventiva para el equipo activo (evitar cálculo si está en modo competitivo)
+  const calculoPreventivo = useMemo(() => {
+    if (!casoConfig || !activeTeam || game?.modoCompetitivo) return null;
     try {
       const ordenesEstimadas = 1000;
-      calculoPreventivo = SimuladorEmpresarial.simularPeriodoEquipo(
+      return SimuladorEmpresarial.simularPeriodoEquipo(
         {
           planta: activeTeam.planta,
           capital: activeTeam.capital,
@@ -561,26 +576,56 @@ export default function GameDashboardPage() {
       );
     } catch (e) {
       console.error('Error calculo preventivo:', e);
+      return null;
     }
-  }
+  }, [
+    casoConfig,
+    activeTeam,
+    game?.modoCompetitivo,
+    game?.periodoActual,
+    precio,
+    marketing,
+    invDes,
+    capacitacion,
+    nivelProd,
+    amplPlanta,
+    pedPrestA,
+    devPrestA,
+    pedPrestB,
+    devPrestB
+  ]);
 
   // Parsear el último reporte de mercado
-  let ultimoReporte: ResultadoRondaMercado | null = null;
-  if (game.rounds && game.rounds.length > 0) {
+  const ultimoReporte = useMemo<ResultadoRondaMercado | null>(() => {
+    if (!game?.rounds || game.rounds.length === 0) return null;
     try {
-      ultimoReporte = JSON.parse(game.rounds[0].resultadoJson);
-    } catch {}
-  }
+      return JSON.parse(game.rounds[0].resultadoJson);
+    } catch {
+      return null;
+    }
+  }, [game?.rounds]);
 
   // Ranking ordenado de todos los equipos por utilidad acumulada final
-  const rankingFinalEquipos = [...game.teams].sort((a, b) => b.utilidadAcumulada - a.utilidadAcumulada);
+  const rankingFinalEquipos = useMemo(() => {
+    if (!game?.teams) return [];
+    return [...game.teams].sort((a, b) => b.utilidadAcumulada - a.utilidadAcumulada);
+  }, [game?.teams]);
+
+  if (loading || !game || !activeTeam) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
+        <RefreshCw className="w-8 h-8 animate-spin text-emerald-500 mb-4" />
+        <p className="text-sm font-medium">Cargando datos del mercado y equipos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       
       {/* Toast de notificación de turnos */}
       {mensajeTurno && (
-        <div className="fixed top-20 right-6 z-50 bg-emerald-500 text-slate-950 font-bold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 animate-bounce">
+        <div className="fixed top-20 right-6 z-50 bg-emerald-400 text-emerald-950 font-bold px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 transition-all duration-300">
           <CheckCircle2 className="w-5 h-5" />
           <span>{mensajeTurno}</span>
         </div>
@@ -684,7 +729,7 @@ export default function GameDashboardPage() {
             ) : (
               <button
                 onClick={() => setActiveTab('resumen')}
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all"
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all"
               >
                 <Trophy className="w-4 h-4" />
                 <span>Ver Podio y Feedback</span>
@@ -1066,7 +1111,7 @@ export default function GameDashboardPage() {
                           onClick={() => setNivelProd(lvl as NivelProduccion)}
                           className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                             nivelProd === lvl
-                              ? 'bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                              ? 'bg-emerald-400 border-emerald-300 text-emerald-950 font-extrabold shadow-md shadow-emerald-500/20'
                               : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
                           }`}
                         >
@@ -1235,7 +1280,7 @@ export default function GameDashboardPage() {
                     type="button"
                     onClick={() => handleGuardarDecision(true)}
                     disabled={guardandoDecision || game.estado === 'finalizada'}
-                    className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all disabled:opacity-40"
+                    className="px-5 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all disabled:opacity-40"
                   >
                     <span>Confirmar Cupón y Pasar Turno</span>
                     <ChevronRight className="w-4 h-4" />
@@ -1993,11 +2038,11 @@ export default function GameDashboardPage() {
                       <div className="flex items-center gap-3">
                         <span className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl shadow-lg ${
                           ['A+', 'A'].includes(feedbackData.calificacion_gestion)
-                            ? 'bg-emerald-500 text-slate-950 shadow-emerald-500/20'
+                            ? 'bg-emerald-400 text-emerald-950 shadow-emerald-500/20'
                             : feedbackData.calificacion_gestion === 'B'
-                              ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/20'
+                              ? 'bg-cyan-400 text-cyan-950 shadow-cyan-500/20'
                               : feedbackData.calificacion_gestion === 'C'
-                                ? 'bg-amber-500 text-slate-950 shadow-amber-500/20'
+                                ? 'bg-amber-400 text-amber-950 shadow-amber-500/20'
                                 : 'bg-rose-500 text-white shadow-rose-500/20'
                         }`}>
                           {feedbackData.calificacion_gestion}
@@ -2260,7 +2305,7 @@ export default function GameDashboardPage() {
                 className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md shrink-0 flex items-center gap-2 ${
                   game.modoCompetitivo
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                    : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
+                    : 'bg-amber-400 hover:bg-amber-300 text-amber-950 shadow-amber-500/20'
                 }`}
               >
                 <Swords className="w-4 h-4" />

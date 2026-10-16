@@ -168,13 +168,13 @@ export default function LobbyPage() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <TrendingUp className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+              <TrendingUp className="w-5 h-5 text-emerald-950 stroke-[2.5]" />
             </div>
             <div>
-              <span className="font-black text-lg tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
-                SIMULANDO EMPRENDEDORES
+              <span className="font-extrabold text-lg tracking-tight text-white">
+                SIMULANDO <span className="text-emerald-400">EMPRENDEDORES</span>
               </span>
-              <span className="text-[10px] block font-mono text-emerald-400/80 -mt-1 font-semibold uppercase tracking-wider">
+              <span className="text-[10px] block font-mono text-emerald-400/80 -mt-0.5 font-semibold uppercase tracking-wider">
                 Simulador de Gestión Empresarial • Versión Educativa
               </span>
             </div>
