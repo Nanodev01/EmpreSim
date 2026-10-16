@@ -1,0 +1,86 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Game {
+  id            String   @id @default(cuid())
+  nombre        String
+  modo          String   // "vs-ai" | "certamen"
+  casoId        String   // ID del Caso activo (ej. "clasico-alta")
+  periodoActual Int      @default(0) // 0 (prueba) hasta 6
+  estado        String   @default("creada") // "creada" | "en_curso" | "finalizada"
+  configCasoJson String  // JSON de la configuración de caso personalizada o editable
+  modoCompetitivo Boolean @default(false) // Si true, desactiva calculadora preventiva y pistas
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  teams         Team[]
+  rounds        RoundReport[]
+}
+
+model Team {
+  id            String   @id @default(cuid())
+  gameId        String
+  nombre        String
+  esHumano      Boolean  @default(true)
+  personalidad  String?  // "agresivo" | "premium" | "conservador" | "equilibrado"
+  
+  // Estado acumulado actual
+  planta               Float   @default(50000.0)
+  capital              Float   @default(70000.0)
+  efectivo             Float   @default(0.0)
+  stockUnidades        Int     @default(0)
+  stockValorizado      Float   @default(0.0)
+  capacitacionAcum     Float   @default(0.0)
+  idAcumulado          Float   @default(0.0)
+  empleados            Int     @default(0)
+  prestamosBcoA        Float   @default(0.0)
+  prestamosBcoB        Float   @default(0.0)
+  utilidadAcumulada    Float   @default(0.0)
+  feedbackJson         String? // Resumen y recomendaciones pedagógicas generadas por IA / Auditor
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  game          Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  decisions     RoundDecision[]
+}
+
+model RoundDecision {
+  id            String   @id @default(cuid())
+  teamId        String
+  periodo       Int
+  precio        Float
+  marketing     Float
+  invDes        Float
+  capacitacion  Float
+  nivelProd     Int
+  amplPlanta    Float
+  pedPrestA     Float
+  devPrestA     Float
+  pedPrestB     Float
+  devPrestB     Float
+  razonamiento  String?  // Razón estratégica (especialmente en Bots IA)
+  createdAt     DateTime @default(now())
+
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, periodo])
+}
+
+model RoundReport {
+  id            String   @id @default(cuid())
+  gameId        String
+  periodo       Int
+  resultadoJson String   // Snapshot completo serializado en JSON (ResultadoRondaMercado)
+  createdAt     DateTime @default(now())
+
+  game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, periodo])
+}
