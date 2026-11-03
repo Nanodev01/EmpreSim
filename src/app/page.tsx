@@ -24,7 +24,10 @@ import {
   HelpCircle,
   Clock,
   Compass,
-  Swords
+  Swords,
+  Wifi,
+  Monitor,
+  LogIn
 } from 'lucide-react';
 import { CASOS_PREDEFINIDOS } from '@/lib/engine/cases';
 import { PersonalidadBot } from '@/lib/engine/bots';
@@ -39,6 +42,8 @@ export default function LobbyPage() {
   const [nombrePartida, setNombrePartida] = useState('');
   const [modo, setModo] = useState<'certamen' | 'vs-ai'>('certamen');
   const [modoCompetitivo, setModoCompetitivo] = useState<boolean>(false);
+  const [dispositivos, setDispositivos] = useState<'multiple' | 'unico'>('multiple');
+  const [codigoUnirse, setCodigoUnirse] = useState('');
   const [casoSeleccionado, setCasoSeleccionado] = useState('clasico-alta');
   const [nombreEmpresa, setNombreEmpresa] = useState('Acme Corp S.A.');
   
@@ -132,7 +137,8 @@ export default function LobbyPage() {
           modo,
           casoId: casoSeleccionado,
           nombreEmpresa,
-          equiposAlumnos: modo === 'certamen' ? equiposAlumnos : undefined,
+          equiposAlumnos: modo === 'certamen' && dispositivos === 'unico' ? equiposAlumnos : undefined,
+          dispositivos: modo === 'certamen' ? dispositivos : 'unico',
           personalidadesBots: botsPayload,
           modoCompetitivo
         })
@@ -149,6 +155,12 @@ export default function LobbyPage() {
     } finally {
       setCreando(false);
     }
+  };
+
+  const handleUnirse = (e: React.FormEvent) => {
+    e.preventDefault();
+    const codigo = codigoUnirse.trim().toUpperCase();
+    if (codigo) router.push(`/unirse/${encodeURIComponent(codigo)}`);
   };
 
   const toggleBot = (perso: PersonalidadBot) => {
@@ -230,7 +242,7 @@ export default function LobbyPage() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Varios equipos de alumnos cargan sus decisiones por turno en la misma pantalla o proyector antes de simular el mercado.
+                      Varios equipos de alumnos compiten entre sí en el mismo mercado, cada uno desde su dispositivo o por turnos en una computadora.
                     </p>
                   </button>
 
@@ -268,6 +280,51 @@ export default function LobbyPage() {
                 />
               </div>
 
+              {/* Cómo se conectan los equipos */}
+              {modo === 'certamen' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                    ¿Cómo van a jugar?
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDispositivos('multiple')}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        dispositivos === 'multiple'
+                          ? 'border-emerald-500 bg-emerald-500/10 text-white ring-1 ring-emerald-500/50'
+                          : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="font-bold text-sm flex items-center gap-2 mb-1.5">
+                        <Wifi className="w-4 h-4" />
+                        Cada equipo en su dispositivo
+                      </span>
+                      <span className="text-xs text-slate-400 leading-relaxed block">
+                        Recibís un código para compartir y cada equipo se une online, sin crear cuentas.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDispositivos('unico')}
+                      className={`p-4 rounded-xl border text-left transition-all ${
+                        dispositivos === 'unico'
+                          ? 'border-emerald-500 bg-emerald-500/10 text-white ring-1 ring-emerald-500/50'
+                          : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="font-bold text-sm flex items-center gap-2 mb-1.5">
+                        <Monitor className="w-4 h-4" />
+                        Una sola computadora
+                      </span>
+                      <span className="text-xs text-slate-400 leading-relaxed block">
+                        Los equipos cargan por turnos en la misma pantalla. Ideal para practicar antes de un certamen.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* SECCIÓN MODO CERTAMEN: EQUIPOS DE ALUMNOS */}
               {modo === 'certamen' && (
                 <div className="bg-slate-800/30 border border-slate-800 p-4 sm:p-5 rounded-2xl space-y-4">
@@ -275,14 +332,18 @@ export default function LobbyPage() {
                     <div>
                       <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                         <GraduationCap className="w-4 h-4 text-emerald-400" />
-                        2. Equipos de Alumnos Participantes ({equiposAlumnos.length})
+                        {dispositivos === 'multiple' ? '2. Equipos de Alumnos' : `2. Equipos de Alumnos Participantes (${equiposAlumnos.length})`}
                       </h3>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Cada equipo tendrá su turno para ingresar precio, marketing, producción y finanzas.
+                        {dispositivos === 'multiple'
+                          ? 'Cada equipo elige su nombre al unirse con el código de la partida.'
+                          : 'Cada equipo tendrá su turno para ingresar precio, marketing, producción y finanzas.'}
                       </p>
                     </div>
                   </div>
 
+                  {dispositivos === 'unico' && (
+                  <>
                   {/* Lista de Equipos */}
                   <div className="space-y-2">
                     {equiposAlumnos.map((eqNombre, idx) => (
@@ -333,6 +394,8 @@ export default function LobbyPage() {
                       <span>Agregar Equipo</span>
                     </button>
                   </div>
+                  </>
+                  )}
 
                   {/* Toggle para sumar también bots */}
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
@@ -502,6 +565,35 @@ export default function LobbyPage() {
 
         {/* Panel Lateral: Partidas Guardadas y Resumen Didáctico */}
         <div className="lg:col-span-5 space-y-6">
+          {/* Unirse a una partida */}
+          <form onSubmit={handleUnirse} className="bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-3">
+            <h3 className="font-bold text-sm text-white flex items-center gap-2">
+              <LogIn className="w-4 h-4 text-emerald-400" />
+              ¿Te invitaron a una partida?
+            </h3>
+            <p className="text-xs text-slate-400">Ingresá el código que te compartieron. No necesitás crear una cuenta.</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={codigoUnirse}
+                onChange={e => setCodigoUnirse(e.target.value.toUpperCase())}
+                maxLength={6}
+                autoCapitalize="characters"
+                autoComplete="off"
+                placeholder="CÓDIGO"
+                aria-label="Código de la partida"
+                className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-center text-base font-mono font-bold tracking-widest text-white focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="submit"
+                disabled={!codigoUnirse.trim()}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl disabled:opacity-40"
+              >
+                Unirme
+              </button>
+            </div>
+          </form>
+
           {/* Tarjeta Didáctica para Alumnos */}
           <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-900/50 rounded-2xl p-6 shadow-xl relative overflow-hidden">
             <div className="flex items-center space-x-2 text-indigo-400 mb-2">
@@ -570,11 +662,14 @@ export default function LobbyPage() {
                         <span>•</span>
                         <span>{g.teams?.length || 0} equipos</span>
                         <span>•</span>
-                        <span className="capitalize">{g.modo === 'certamen' ? 'Aula' : 'vs IA'}</span>
+                        <span>{g.dispositivos === 'multiple' ? 'Online' : g.modo === 'certamen' ? 'Una computadora' : 'vs IA'}</span>
+                        <span>•</span>
+                        <span>{g.esCoordinador ? 'Coordinador' : 'Equipo'}</span>
                       </div>
                     </Link>
 
                     <div className="flex items-center gap-1 shrink-0">
+                      {g.esCoordinador && (
                       <button
                         type="button"
                         onClick={(e) => handleEliminarPartida(e, g.id, g.nombre)}
@@ -583,6 +678,7 @@ export default function LobbyPage() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      )}
                       <Link
                         href={`/game/${g.id}`}
                         className="p-1.5 text-slate-500 group-hover:text-white transition-colors"

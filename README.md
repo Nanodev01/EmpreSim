@@ -1,6 +1,11 @@
 # Simulando Emprendedores
 
-Simulador de gestión empresarial para el aula. Cada equipo carga sus decisiones por turno, sin ver las de los demás, y compite en un mercado durante siete períodos. No requiere cuentas: cada partida queda asociada al navegador que la creó.
+Simulador de gestión empresarial para el aula. Los equipos compiten en un mercado durante siete períodos, sin ver los valores que cargan los demás. No requiere cuentas.
+
+Se puede jugar de dos formas:
+
+- **Cada equipo en su dispositivo:** quien crea la partida comparte un código o link y cada equipo se une con el nombre que elija. Su navegador queda asociado al equipo; si cambia de dispositivo, el coordinador puede liberarlo para retomarlo.
+- **Una sola computadora:** los equipos cargan por turnos en la misma pantalla. Ideal para practicar antes de un certamen.
 
 ## Desarrollo
 

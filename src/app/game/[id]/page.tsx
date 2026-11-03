@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -40,12 +40,18 @@ import {
   CheckCheck,
   Trash2,
   Swords,
-  EyeOff
+  EyeOff,
+  Copy,
+  Wifi,
+  UserMinus,
+  Unplug
 } from 'lucide-react';
 import { SimuladorEmpresarial } from '@/lib/engine/simulator';
 import { DecisionesEquipo, NivelProduccion, ResultadoSimulacionEquipo, ResultadoRondaMercado } from '@/lib/engine/types';
 import { CasoSimulacion, CasoPeriodoConfig } from '@/lib/engine/cases';
 import { FeedbackEquipo } from '@/lib/ai/coach';
+
+const SONDEO_MS = 4000;
 
 type CampoNumerico = number | '';
 
@@ -60,11 +66,14 @@ export default function GameDashboardPage() {
   const [game, setGame] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [noDisponible, setNoDisponible] = useState(false);
+  const periodoCargadoRef = useRef<number | null>(null);
+  const huellaRef = useRef<string | null>(null);
+  const fetchGameRef = useRef<() => Promise<void>>(async () => {});
   const [simulando, setSimulando] = useState(false);
   const [guardandoDecision, setGuardandoDecision] = useState(false);
   const [creandoEquipo, setCreandoEquipo] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
-  const [activeTab, setActiveTab] = useState<'cupon' | 'reporte' | 'mercado' | 'resumen' | 'coordinador'>('cupon');
+  const [activeTab, setActiveTab] = useState<'cupon' | 'sala' | 'reporte' | 'mercado' | 'resumen' | 'coordinador'>('cupon');
 
   // Control de turnos de equipos de alumnos
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
@@ -111,24 +120,54 @@ export default function GameDashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
+  const esOnlineEnCurso = game?.dispositivos === 'multiple' && game?.estado !== 'finalizada';
+
+  // Las pantallas online se actualizan solas: solo recargan la partida si algo cambió.
+  useEffect(() => {
+    if (!esOnlineEnCurso) return;
+    const consultar = async () => {
+      if (document.hidden) return;
+      try {
+        const res = await fetch(`/api/games/${gameId}/estado`);
+        if (res.status === 404) {
+          setNoDisponible(true);
+          return;
+        }
+        if (!res.ok) return;
+        const { huella } = await res.json();
+        if (huellaRef.current !== null && huellaRef.current !== huella) {
+          await fetchGameRef.current();
+        }
+        huellaRef.current = huella;
+      } catch {
+        // Corte de red momentáneo: se reintenta en la próxima consulta.
+      }
+    };
+    consultar();
+    const intervalo = setInterval(consultar, SONDEO_MS);
+    return () => clearInterval(intervalo);
+  }, [esOnlineEnCurso, gameId]);
+
   const fetchGame = async () => {
     try {
       const res = await fetch(`/api/games/${gameId}`);
       if (!res.ok) {
-        setNoDisponible(true);
+        if (res.status === 404) setNoDisponible(true);
         return;
       }
       const data = await res.json();
       setGame(data);
 
       const humanos = data.teams?.filter((t: any) => t.esHumano) || [];
+      const online = data.dispositivos === 'multiple';
+      const miEquipoId: string | null = data.visor?.miEquipoId ?? null;
       const enTurno = humanos.find((t: any) => !t.yaGuardo);
-      const primero = humanos[0]?.id ?? data.teams?.[0]?.id;
-      setSelectedTeamId(enTurno?.id ?? '');
-      if (!selectedReportTeamId) {
+      const primero = miEquipoId ?? humanos[0]?.id ?? data.teams?.[0]?.id;
+      setSelectedTeamId(online ? miEquipoId ?? '' : enTurno?.id ?? '');
+      if (!selectedReportTeamId || !data.teams?.some((t: any) => t.id === selectedReportTeamId)) {
         setSelectedReportTeamId(primero);
       }
-      if (!selectedFeedbackTeamId) {
+      if (!selectedFeedbackTeamId || !data.teams?.some((t: any) => t.id === selectedFeedbackTeamId)) {
         setSelectedFeedbackTeamId(primero);
       }
 
@@ -138,6 +177,24 @@ export default function GameDashboardPage() {
         try {
           setFeedbackData(JSON.parse(fbTeam.feedbackJson));
         } catch {}
+      }
+
+      const periodoAnterior = periodoCargadoRef.current;
+      const cambioDePeriodo = periodoAnterior !== null && periodoAnterior !== data.periodoActual;
+      periodoCargadoRef.current = data.periodoActual;
+
+      if (online) {
+        const miEquipo = data.teams?.find((t: any) => t.id === miEquipoId);
+        if (periodoAnterior === null) {
+          if (!miEquipo) setActiveTab('sala');
+          cargarCupon(miEquipo?.decisions?.find((d: any) => d.periodo === data.periodoActual));
+        } else if (cambioDePeriodo) {
+          // Lo actualiza la consulta periódica: no se toca el cupón mientras el equipo escribe.
+          cargarCupon(undefined);
+          setActiveTab(data.estado === 'finalizada' && data.modoCompetitivo ? 'resumen' : 'mercado');
+          setMensajeTurno('📊 Se cerró el ciclo: ya está el ranking de la ronda.');
+          setTimeout(() => setMensajeTurno(null), 5000);
+        }
       }
 
       // Si la partida ya fue finalizada, sugerir la pestaña de resumen
@@ -163,6 +220,21 @@ export default function GameDashboardPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  fetchGameRef.current = fetchGame;
+
+  const cargarCupon = (decision?: any) => {
+    setPrecio(decision?.precio ?? '');
+    setMarketing(decision?.marketing ?? '');
+    setInvDes(decision?.invDes ?? '');
+    setCapacitacion(decision?.capacitacion ?? '');
+    setNivelProd(decision?.nivelProd ?? '');
+    setAmplPlanta(decision?.amplPlanta ?? '');
+    setPedPrestA(decision?.pedPrestA ?? '');
+    setDevPrestA(decision?.devPrestA ?? '');
+    setPedPrestB(decision?.pedPrestB ?? '');
+    setDevPrestB(decision?.devPrestB ?? '');
   };
 
   const limpiarCupon = () => {
@@ -229,6 +301,13 @@ export default function GameDashboardPage() {
         return;
       }
 
+      if (game.dispositivos === 'multiple') {
+        await fetchGame();
+        setMensajeTurno('✅ Guardado. Podés corregirlo hasta que el coordinador cierre el ciclo.');
+        setTimeout(() => setMensajeTurno(null), 4000);
+        return;
+      }
+
       // El cupón se vacía antes de mostrar la tarjeta siguiente: nadie ve lo que cargó el equipo anterior.
       limpiarCupon();
       await fetchGame();
@@ -279,17 +358,23 @@ export default function GameDashboardPage() {
     }
   };
 
-  const handleFinalizarCiclo = async () => {
+  const handleFinalizarCiclo = async (forzar: boolean = false) => {
     if (!game) return;
 
-    const aviso = game.modoCompetitivo
+    const aviso = forzar
+      ? 'Hay equipos que no guardaron. Si cerrás el ciclo igual, ese equipo no produce ni invierte en esta ronda. ¿Continuar?'
+      : game.modoCompetitivo
       ? `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se publica el ranking.`
       : `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se muestran los resultados.`;
     if (!confirm(aviso)) return;
 
     setSimulando(true);
     try {
-      const res = await fetch(`/api/games/${gameId}/simulate`, { method: 'POST' });
+      const res = await fetch(`/api/games/${gameId}/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forzar })
+      });
       if (!res.ok) {
         const err = await res.json();
         alert(err.error || 'Error al finalizar el ciclo');
@@ -304,6 +389,30 @@ export default function GameDashboardPage() {
     } finally {
       setSimulando(false);
     }
+  };
+
+  const accionEquipoSala = async (equipo: any, metodo: 'PATCH' | 'DELETE') => {
+    const aviso = metodo === 'PATCH'
+      ? `¿Liberar a "${equipo.nombre}"? Quien tenga el código podrá retomarlo desde otro dispositivo.`
+      : `¿Quitar a "${equipo.nombre}" de la partida?`;
+    if (!confirm(aviso)) return;
+    const res = await fetch(`/api/games/${gameId}/teams/${equipo.id}`, { method: metodo });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || 'No se pudo realizar la acción');
+      return;
+    }
+    await fetchGame();
+  };
+
+  const copiarInvitacion = async (texto: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setMensajeTurno('🔗 Copiado.');
+    } catch {
+      setMensajeTurno(texto);
+    }
+    setTimeout(() => setMensajeTurno(null), 3000);
   };
 
   const handleFinalizarPartida = async () => {
@@ -464,7 +573,7 @@ export default function GameDashboardPage() {
 
   const activeTeam = useMemo(() => {
     if (!game?.teams || game.teams.length === 0) return null;
-    return game.teams.find((t: any) => t.id === selectedTeamId) || humanTeams[0] || game.teams[0];
+    return game.teams.find((t: any) => t.id === selectedTeamId) || humanTeams[0] || game.teams[0] || null;
   }, [game?.teams, selectedTeamId, humanTeams]);
 
   const activeReportTeam = useMemo(() => {
@@ -486,6 +595,16 @@ export default function GameDashboardPage() {
   const enCurso = game?.estado !== 'finalizada';
   const cicloCompleto = todosListos && enCurso;
   const resultadosOcultos = Boolean(game?.modoCompetitivo) && enCurso;
+  const online = game?.dispositivos === 'multiple';
+  const esCoordinador = Boolean(game?.visor?.esCoordinador);
+  const miEquipoId: string | null = game?.visor?.miEquipoId ?? null;
+  // En una sola computadora aparece el panel de cierre al completar los turnos; online cada equipo sigue viendo su tarjeta.
+  const puedeCargar = enCurso && (online ? Boolean(miEquipoId) : !cicloCompleto);
+  const cierrePanelLocal = !online && cicloCompleto;
+  const puedeCerrarCiclo = esCoordinador && cicloCompleto;
+  const verDatosDeOtros = !online || esCoordinador;
+  const equiposParaReporte = resultadosOcultos && online ? game.teams.filter((t: any) => t.id === miEquipoId) : game?.teams ?? [];
+  const equiposDevolucion = verDatosDeOtros || !enCurso ? game?.teams ?? [] : (game?.teams ?? []).filter((t: any) => t.id === miEquipoId);
 
   // Calculadora Preventiva para el equipo activo (evitar cálculo si está en modo competitivo)
   const calculoPreventivo = useMemo(() => {
@@ -564,7 +683,7 @@ export default function GameDashboardPage() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 text-center px-6 gap-4">
         <AlertCircle className="w-8 h-8 text-amber-400" />
         <p className="text-sm font-medium max-w-md">
-          Esta partida no existe o fue creada desde otro navegador. Cada partida solo se puede abrir desde el navegador donde se creó.
+          No tenés acceso a esta partida desde este navegador. Si formás parte de ella, entrá con el código que te compartieron.
         </p>
         <Link href="/" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl">
           Volver al inicio
@@ -573,7 +692,7 @@ export default function GameDashboardPage() {
     );
   }
 
-  if (loading || !game || !activeTeam) {
+  if (loading || !game) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
         <RefreshCw className="w-8 h-8 animate-spin text-emerald-500 mb-4" />
@@ -617,7 +736,7 @@ export default function GameDashboardPage() {
                   </span>
                 )}
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
-                  {game.modo === 'certamen' ? 'Aula / Alumnos' : 'vs Bots IA'}
+                  {online ? 'Online' : game.modo === 'certamen' ? 'Una computadora' : 'vs Bots IA'}
                 </span>
                 {game.modoCompetitivo ? (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold flex items-center gap-1">
@@ -646,7 +765,7 @@ export default function GameDashboardPage() {
               </button>
             )}
 
-            {game.estado !== 'finalizada' && (
+            {enCurso && esCoordinador && (
               <button
                 onClick={handleFinalizarPartida}
                 disabled={finalizando || game.periodoActual === 0}
@@ -659,9 +778,9 @@ export default function GameDashboardPage() {
             )}
 
             {enCurso ? (
-              cicloCompleto && (
+              puedeCerrarCiclo && (
                 <button
-                  onClick={handleFinalizarCiclo}
+                  onClick={() => handleFinalizarCiclo()}
                   disabled={simulando}
                   className="px-4 py-2 rounded-xl font-bold text-xs shadow-lg flex items-center gap-2 transition-all disabled:opacity-50 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-emerald-500/20"
                 >
@@ -711,7 +830,7 @@ export default function GameDashboardPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-1">
                 <GraduationCap className="w-4 h-4 text-emerald-400" />
-                Turno:
+                {online ? 'Equipos:' : 'Turno:'}
               </span>
 
               {humanTeams.map((team: any, idx: number) => {
@@ -739,14 +858,14 @@ export default function GameDashboardPage() {
                       </span>
                     ) : (
                       <span className="text-[10px] text-amber-400/80 font-mono">
-                        {isSelected ? 'Cargando...' : 'Pendiente'}
+                        {online ? (team.conectado ? 'Pendiente' : 'Sin dispositivo') : isSelected ? 'Cargando...' : 'Pendiente'}
                       </span>
                     )}
                   </div>
                 );
               })}
 
-              {game.periodoActual === 0 && (
+              {!online && game.periodoActual === 0 && (
               <button
                 onClick={() => setShowAddTeamModal(true)}
                 className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-700 hover:border-emerald-500/60 bg-slate-900/40 text-slate-400 hover:text-emerald-400 text-xs font-semibold flex items-center gap-1 transition-colors shrink-0"
@@ -786,7 +905,7 @@ export default function GameDashboardPage() {
       )}
 
       {/* KPI Cards Bar del Equipo Activo */}
-      {!cicloCompleto && (
+      {puedeCargar && (
       <section className="bg-slate-900/40 border-b border-slate-800/80 py-4 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-2">
@@ -849,7 +968,21 @@ export default function GameDashboardPage() {
       {/* Navigation Tabs */}
       <div className="border-b border-slate-800 bg-slate-900/40 px-6">
         <div className="max-w-7xl mx-auto flex space-x-2 overflow-x-auto pb-1 sm:pb-0">
-          {enCurso && (
+          {online && esCoordinador && (
+            <button
+              onClick={() => setActiveTab('sala')}
+              className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === 'sala'
+                  ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Wifi className="w-4 h-4" />
+              Sala de la Partida
+            </button>
+          )}
+
+          {enCurso && (!online || miEquipoId) && (
           <button
             onClick={() => setActiveTab('cupon')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -863,7 +996,7 @@ export default function GameDashboardPage() {
           </button>
           )}
 
-          {!resultadosOcultos && (
+          {game.teams.length > 0 && (!resultadosOcultos || (online && miEquipoId)) && (
           <button
             onClick={() => setActiveTab('reporte')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -889,7 +1022,7 @@ export default function GameDashboardPage() {
             Mercado y Ranking
           </button>
 
-          {!resultadosOcultos && (
+          {game.teams.length > 0 && !resultadosOcultos && (
           <button
             onClick={() => setActiveTab('resumen')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -906,6 +1039,7 @@ export default function GameDashboardPage() {
           </button>
           )}
 
+          {esCoordinador && (
           <button
             onClick={() => setActiveTab('coordinador')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -917,6 +1051,7 @@ export default function GameDashboardPage() {
             <Building2 className="w-4 h-4" />
             Panel del Coordinador
           </button>
+          )}
         </div>
       </div>
 
@@ -926,7 +1061,103 @@ export default function GameDashboardPage() {
         {/* ========================================================================= */}
         {/* TAB 1: CUPÓN DE DECISIONES + CALCULADORA PREVENTIVA EN VIVO */}
         {/* ========================================================================= */}
-        {activeTab === 'cupon' && cicloCompleto && (
+        {activeTab === 'sala' && online && esCoordinador && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            <div className="bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-6 shadow-xl text-center space-y-3">
+              <h2 className="font-bold text-base text-white">Compartí este código con los equipos</h2>
+              <p data-testid="codigo-partida" className="text-4xl font-black font-mono tracking-[0.3em] text-emerald-400">{game.codigo}</p>
+              <p className="text-xs text-slate-400">Cada equipo lo ingresa en la pantalla de inicio o entra directo con el link.</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copiarInvitacion(`${window.location.origin}/unirse/${game.codigo}`)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl inline-flex items-center gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copiar link de invitación</span>
+                </button>
+                {!miEquipoId && enCurso && (
+                  <Link
+                    href={`/unirse/${game.codigo}`}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700"
+                  >
+                    También quiero jugar con un equipo
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+              <h3 className="font-bold text-sm text-white">
+                Equipos en la partida • Período {game.periodoActual}
+              </h3>
+              {humanTeams.length === 0 ? (
+                <p className="py-6 text-center text-xs text-slate-400">Esperando que se sume el primer equipo…</p>
+              ) : (
+                <ul className="divide-y divide-slate-800">
+                  {humanTeams.map((team: any) => (
+                    <li key={team.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold text-slate-200">{team.nombre}</span>
+                      <span className="flex items-center gap-2">
+                        {team.yaGuardo ? (
+                          <span className="text-emerald-400 font-bold">Guardó</span>
+                        ) : (
+                          <span className="text-amber-400">{team.conectado ? 'Cargando…' : 'Sin dispositivo'}</span>
+                        )}
+                        {enCurso && team.conectado && (
+                          <button
+                            type="button"
+                            onClick={() => accionEquipoSala(team, 'PATCH')}
+                            title="Liberar para retomarlo desde otro dispositivo"
+                            className="p-1.5 text-slate-400 hover:text-amber-300 rounded-lg hover:bg-slate-800"
+                          >
+                            <Unplug className="w-4 h-4" />
+                          </button>
+                        )}
+                        {enCurso && game.periodoActual === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => accionEquipoSala(team, 'DELETE')}
+                            title="Quitar de la partida"
+                            className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                          >
+                            <UserMinus className="w-4 h-4" />
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {enCurso && humanTeams.length > 0 && (
+                <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2">
+                  {!todosListos && (
+                    <button
+                      type="button"
+                      onClick={() => handleFinalizarCiclo(true)}
+                      disabled={simulando || equiposListosCount === 0}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700 disabled:opacity-40"
+                    >
+                      Cerrar el ciclo con equipos pendientes
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleFinalizarCiclo()}
+                    disabled={simulando || !todosListos}
+                    className="px-5 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold text-xs rounded-xl inline-flex items-center gap-2 disabled:opacity-40"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>{simulando ? 'Procesando...' : 'Finalizar el ciclo'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'cupon' && cierrePanelLocal && (
           <div className="max-w-2xl mx-auto bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-8 shadow-xl text-center space-y-4">
             <CheckCheck className="w-10 h-10 mx-auto text-emerald-400" />
             <h2 className="font-bold text-lg text-white">Todos los equipos guardaron sus resultados</h2>
@@ -937,7 +1168,7 @@ export default function GameDashboardPage() {
             </p>
             <button
               type="button"
-              onClick={handleFinalizarCiclo}
+              onClick={() => handleFinalizarCiclo()}
               disabled={simulando}
               className="px-6 py-3 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold text-sm rounded-xl shadow-lg shadow-emerald-500/20 inline-flex items-center gap-2 transition-all disabled:opacity-50"
             >
@@ -947,7 +1178,7 @@ export default function GameDashboardPage() {
           </div>
         )}
 
-        {activeTab === 'cupon' && !cicloCompleto && enCurso && (
+        {activeTab === 'cupon' && puedeCargar && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
             {/* Formulario de Entrada */}
@@ -961,7 +1192,9 @@ export default function GameDashboardPage() {
                     </h2>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Período {game.periodoActual} • Completá las decisiones de tu empresa y guardá. Al guardar, los valores se ocultan y sigue el próximo equipo.
+                    Período {game.periodoActual} • {online
+                      ? 'Completá las decisiones de tu empresa y guardá. Los demás equipos no ven lo que cargás.'
+                      : 'Completá las decisiones de tu empresa y guardá. Al guardar, los valores se ocultan y sigue el próximo equipo.'}
                   </p>
                 </div>
 
@@ -1215,7 +1448,7 @@ export default function GameDashboardPage() {
                 {/* Botón Inferior para avanzar de turno */}
                 <div className="pt-2 flex items-center justify-between">
                   <span className="text-xs text-slate-400">
-                    Equipo actual: <strong className="text-emerald-400">{activeTeam.nombre}</strong>
+                    {online ? 'Tu equipo' : 'Equipo actual'}: <strong className="text-emerald-400">{activeTeam.nombre}</strong>
                   </span>
                   <button
                     type="button"
@@ -1223,7 +1456,7 @@ export default function GameDashboardPage() {
                     disabled={guardandoDecision}
                     className="px-5 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all disabled:opacity-40"
                   >
-                    <span>{guardandoDecision ? 'Guardando...' : 'Guardar resultados'}</span>
+                    <span>{guardandoDecision ? 'Guardando...' : online && activeTeam?.yaGuardo ? 'Actualizar resultados' : 'Guardar resultados'}</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -1422,7 +1655,7 @@ export default function GameDashboardPage() {
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                {game.teams.map((team: any, idx: number) => {
+                {equiposParaReporte.map((team: any, idx: number) => {
                   const isSelected = team.id === selectedReportTeamId;
 
                   return (
@@ -1652,7 +1885,7 @@ export default function GameDashboardPage() {
             {enCurso && ultimoReporte && (
               <div className="flex justify-end">
                 <button
-                  onClick={() => setActiveTab('cupon')}
+                  onClick={() => setActiveTab(online && !miEquipoId ? 'sala' : 'cupon')}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all"
                 >
                   <span>Continuar con el Período {game.periodoActual}</span>
@@ -1698,7 +1931,7 @@ export default function GameDashboardPage() {
                       <tbody className="divide-y divide-slate-800/60">
                         {ultimoReporte.ranking.map((item, idx) => {
                           const isHuman = humanTeams.some((t: any) => t.id === item.equipo_id);
-                          const isSelected = item.equipo_id === selectedTeamId;
+                          const isSelected = item.equipo_id === (online ? miEquipoId : selectedTeamId);
 
                           return (
                             <tr
@@ -1867,7 +2100,7 @@ export default function GameDashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {game.estado !== 'finalizada' && (
+                  {enCurso && esCoordinador && (
                     <button
                       onClick={handleFinalizarPartida}
                       disabled={finalizando || game.periodoActual === 0}
@@ -1951,7 +2184,7 @@ export default function GameDashboardPage() {
                     }}
                     className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-semibold focus:outline-none focus:border-emerald-500"
                   >
-                    {game.teams.map((t: any) => (
+                    {equiposDevolucion.map((t: any) => (
                       <option key={t.id} value={t.id}>
                         Auditar: {t.nombre} {t.esHumano ? '(Alumnos)' : '(IA)'}
                       </option>
@@ -2131,7 +2364,7 @@ export default function GameDashboardPage() {
 
               {/* Selector de Equipo para ver historial */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-                {game.teams.map((tm: any) => (
+                {equiposDevolucion.map((tm: any) => (
                   <button
                     key={tm.id}
                     onClick={() => setSelectedFeedbackTeamId(tm.id)}
@@ -2207,7 +2440,7 @@ export default function GameDashboardPage() {
         {/* ========================================================================= */}
         {/* TAB 5: PANEL DEL COORDINADOR (TFMODIFICARDATOS) */}
         {/* ========================================================================= */}
-        {activeTab === 'coordinador' && (
+        {activeTab === 'coordinador' && esCoordinador && (
           <div className="max-w-4xl mx-auto bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
             <div className="border-b border-slate-800 pb-4">
               <span className="text-[10px] font-mono text-purple-400 uppercase font-bold tracking-wider block">
