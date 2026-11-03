@@ -6,19 +6,56 @@ services:
     image: simulando-emprendedores:latest
     container_name: simulando-emprendedores
     restart: unless-stopped
-    ports:
-      - "${PORT:-5111}:5111"
+    # Sin puertos publicados: solo se accede a través de Caddy.
+    expose:
+      - "5111"
     environment:
-      - NODE_ENV=production
-      - PORT=5111
-      - DATABASE_URL=file:/app/data/dev.db
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
     volumes:
       - simulando_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: simulando-caddy
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    image: alpine:3.22
+    container_name: simulando-backup
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      - BACKUP_INTERVALO_SEGUNDOS=${BACKUP_INTERVALO_SEGUNDOS:-21600}
+      - BACKUP_RETENCION_DIAS=${BACKUP_RETENCION_DIAS:-14}
+    volumes:
+      - simulando_data:/data
+      - simulando_backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: ["sh", "/backup.sh"]
 
 volumes:
   simulando_data:
-    driver: local
+  simulando_backups:
+  caddy_data:
+  caddy_config:

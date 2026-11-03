@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Simulando Emprendedores
 
-## Getting Started
+Simulador de gestión empresarial para el aula. Cada equipo carga sus decisiones por turno, sin ver las de los demás, y compite en un mercado durante siete períodos. No requiere cuentas: cada partida queda asociada al navegador que la creó.
 
-First, run the development server:
+## Desarrollo
 
 ```bash
+cp .env.example .env
+npm install
+npx prisma migrate deploy
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Verificaciones: `npm test`, `npx tsc --noEmit` y `npm run lint`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Puesta en producción
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Hace falta un servidor con Docker, los puertos 80 y 443 abiertos y un dominio que apunte a él.
 
-## Learn More
+```bash
+cp .env.example .env   # definir DOMAIN y, si se quiere, una clave de IA
+docker compose up -d --build
+```
 
-To learn more about Next.js, take a look at the following resources:
+Caddy obtiene y renueva el certificado HTTPS. Las migraciones se aplican solas al iniciar.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Backups
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+El servicio `backup` guarda una copia comprimida cada 6 horas y conserva 14 días (`BACKUP_INTERVALO_SEGUNDOS`, `BACKUP_RETENCION_DIAS`). Las copias quedan en el volumen `simulando_backups`, en el mismo servidor: conviene copiarlas también a otro lugar.
 
-## Deploy on Vercel
+Para restaurar una copia:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+docker compose stop web
+docker compose run --rm --entrypoint sh backup -c \
+  "gunzip -c /backups/ARCHIVO.db.gz > /data/simulador.db && rm -f /data/simulador.db-wal /data/simulador.db-shm && chown 1000:1000 /data/simulador.db"
+docker compose start web
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Documentación
+
+- [Registro de commits e historias de usuario](docs/HISTORIAS_DE_USUARIO.md)

@@ -13,6 +13,9 @@ node_modules
 prisma/*.db
 prisma/*.db-*
 
+tsconfig.tsbuildinfo
 docs
 README.md
-tsconfig.tsbuildinfo
+.github
+Caddyfile
+scripts
