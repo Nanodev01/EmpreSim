@@ -714,18 +714,18 @@ export default function GameDashboardPage() {
 
       {/* Header Superior */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-16 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <Link
               href="/"
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              className="shrink-0 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
               title="Volver al Lobby"
             >
               <ChevronLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-sm text-white">{game.nombre}</span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-bold text-sm text-white break-words min-w-0">{game.nombre}</span>
                 {game.estado === 'finalizada' ? (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center gap-1">
                     <Flag className="w-3 h-3" /> Finalizada
