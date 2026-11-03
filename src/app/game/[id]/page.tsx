@@ -716,7 +716,7 @@ export default function GameDashboardPage() {
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
             
             {/* Selector de Turno */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-1">
                 <GraduationCap className="w-4 h-4 text-emerald-400" />
                 Turno:
@@ -983,7 +983,7 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         1. Precio de Venta ($50 a $100 u$s)
                       </label>
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold">{precio === '' ? 'Sin completar' : `$${precio} u$s`}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold">{precio !== '' && `$${precio} u$s`}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <input
@@ -1015,7 +1015,7 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         2. Marketing ($0 a $10.000 u$s)
                       </label>
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold">${numero(marketing).toLocaleString()}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold">{marketing !== '' && `$${marketing.toLocaleString()}`}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <input
@@ -1078,7 +1078,7 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         4. Capacitación ($0 a $20.000)
                       </label>
-                      <span className="text-[10px] text-purple-400 font-mono font-bold">${numero(capacitacion).toLocaleString()}</span>
+                      <span className="text-[10px] text-purple-400 font-mono font-bold">{capacitacion !== '' && `$${capacitacion.toLocaleString()}`}</span>
                     </div>
                     <select
                       value={capacitacion}
@@ -1107,7 +1107,7 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         5. Investigación y Desarrollo (I+D)
                       </label>
-                      <span className="text-[10px] text-teal-400 font-mono font-bold">${numero(invDes).toLocaleString()}</span>
+                      <span className="text-[10px] text-teal-400 font-mono font-bold">{invDes !== '' && `$${invDes.toLocaleString()}`}</span>
                     </div>
                     <input
                       type="number"
@@ -1130,7 +1130,7 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         6. Ampliación de Planta ($)
                       </label>
-                      <span className="text-[10px] text-cyan-400 font-mono font-bold">+${numero(amplPlanta).toLocaleString()}</span>
+                      <span className="text-[10px] text-cyan-400 font-mono font-bold">{amplPlanta !== '' && `+$${amplPlanta.toLocaleString()}`}</span>
                     </div>
                     <input
                       type="number"
@@ -1761,6 +1761,7 @@ export default function GameDashboardPage() {
                 </div>
 
                 {/* Estrategias de los Bots de IA */}
+                {botTeams.length > 0 && (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 shadow-xl">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-sm text-white flex items-center gap-2">
@@ -1825,6 +1826,7 @@ export default function GameDashboardPage() {
                     </>
                   )}
                 </div>
+                )}
               </>
             ) : (
               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center text-slate-500">
