@@ -87,7 +87,7 @@ export default function RecuperarPage() {
           </div>
         )}
 
-        <Link href="/" className="block text-center text-xs text-slate-400 underline hover:text-white">
+        <Link href="/" className="block py-2 text-center text-xs text-slate-400 underline hover:text-white">
           Volver al inicio
         </Link>
       </div>

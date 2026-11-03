@@ -735,7 +735,7 @@ export default function GameDashboardPage() {
         <p className="text-sm font-medium max-w-md">
           No tenés acceso a esta partida desde este navegador. Si formás parte de ella, entrá con el código que te compartieron.
         </p>
-        <Link href="/recuperar" className="text-xs underline hover:text-white">
+        <Link href="/recuperar" className="py-2 text-xs underline hover:text-white">
           Soy el coordinador y tengo mi código
         </Link>
         <Link href="/" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl">
@@ -766,8 +766,8 @@ export default function GameDashboardPage() {
       )}
 
       {/* Header Superior */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-16 py-2 flex items-center justify-between gap-3">
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md z-40 [@media(min-width:768px)_and_(min-height:600px)]:sticky [@media(min-width:768px)_and_(min-height:600px)]:top-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-16 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <Link
               href="/"
@@ -807,14 +807,16 @@ export default function GameDashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center gap-2.5 ml-auto shrink-0">
             {!game.modoCompetitivo && (
               <button
                 onClick={() => setShowDidacticModal(true)}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold border border-amber-500/20 transition-all"
+                title="Guía Didáctica"
+                aria-label="Guía Didáctica"
+                className="flex items-center whitespace-nowrap gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold border border-amber-500/20 transition-all"
               >
                 <HelpCircle className="w-4 h-4 text-amber-400" />
-                <span>Guía Didáctica</span>
+                <span className="hidden lg:inline">Guía Didáctica</span>
               </button>
             )}
 
@@ -822,11 +824,12 @@ export default function GameDashboardPage() {
               <button
                 onClick={handleFinalizarPartida}
                 disabled={finalizando || game.periodoActual === 0}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 text-xs font-semibold border border-slate-700 hover:border-rose-500/30 transition-all disabled:opacity-40"
+                aria-label="Finalizar la partida"
+                className="flex items-center whitespace-nowrap gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 text-xs font-semibold border border-slate-700 hover:border-rose-500/30 transition-all disabled:opacity-40"
                 title="Cerrar el certamen y proclamar ganadores"
               >
                 <Flag className="w-4 h-4" />
-                <span>Finalizar</span>
+                <span className="hidden lg:inline">Finalizar</span>
               </button>
             )}
 
@@ -858,14 +861,14 @@ export default function GameDashboardPage() {
       {casoConfig && (
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border-b border-slate-800/80 px-6 py-2.5">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-0.5 min-w-0">
               <span className="font-semibold text-indigo-400 flex items-center gap-1.5 shrink-0">
                 <Flame className="w-3.5 h-3.5 text-amber-400" />
                 Situación Macroeconómica:
               </span>
-              <span className="text-slate-300 line-clamp-1">{casoConfig.noticia_economica}</span>
+              <span className="text-slate-300 sm:line-clamp-1" title={casoConfig.noticia_economica}>{casoConfig.noticia_economica}</span>
             </div>
-            <div className="flex items-center space-x-3 text-slate-400 font-mono text-[11px] shrink-0">
+            <div className="flex flex-wrap items-center gap-x-3 text-slate-400 font-mono text-[11px] shrink-0">
               <span>Tasa A: <strong className="text-white">{casoConfig.config_bancos.tasa_bco_a}%</strong></span>
               <span>Tasa B: <strong className="text-white">{casoConfig.config_bancos.tasa_bco_b}%</strong></span>
               <span>Multa Stock: <strong className="text-amber-400">${casoConfig.config_bancos.penalidad_stock}/u</strong></span>
@@ -876,11 +879,11 @@ export default function GameDashboardPage() {
 
       {/* BARRA DE TURNOS DE ALUMNOS (Turn Stepper) - Visible en juego activo */}
       {game.estado !== 'finalizada' && (
-        <section className="bg-slate-900/90 border-b border-slate-800 py-3 px-6 shadow-md">
+        <section className="bg-slate-900/90 border-b border-slate-800 py-3 px-4 sm:px-6 shadow-md">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
             
             {/* Selector de Turno */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-1">
                 <GraduationCap className="w-4 h-4 text-emerald-400" />
                 {online ? 'Equipos:' : 'Turno:'}
@@ -893,7 +896,7 @@ export default function GameDashboardPage() {
                 return (
                   <div
                     key={team.id}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-2 shrink-0 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-2 min-w-0 max-w-full ${
                       isSelected
                         ? `ring-2 ${color.active} text-white shadow-md`
                         : team.yaGuardo
@@ -901,16 +904,16 @@ export default function GameDashboardPage() {
                           : 'bg-slate-900/60 border-slate-800 text-slate-500'
                     }`}
                   >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${color.bg} ${color.text}`}>
+                    <span className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center font-bold text-[10px] ${color.bg} ${color.text}`}>
                       {idx + 1}
                     </span>
-                    <span className="font-semibold">{team.nombre}</span>
+                    <span className="font-semibold truncate min-w-0" title={team.nombre}>{team.nombre}</span>
                     {team.yaGuardo ? (
-                      <span className="flex items-center text-[10px] text-emerald-400 font-bold gap-0.5">
+                      <span className="shrink-0 flex items-center text-[10px] text-emerald-400 font-bold gap-0.5">
                         <Check className="w-3 h-3 stroke-[3]" /> Listo
                       </span>
                     ) : (
-                      <span className="text-[10px] text-amber-400/80 font-mono">
+                      <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-400/80 font-mono">
                         {online ? (team.conectado ? 'Pendiente' : 'Sin dispositivo') : isSelected ? 'Cargando...' : 'Pendiente'}
                       </span>
                     )}
@@ -1166,7 +1169,7 @@ export default function GameDashboardPage() {
                             type="button"
                             onClick={() => accionEquipoSala(team, 'PATCH')}
                             title="Liberar para retomarlo desde otro dispositivo"
-                            className="p-1.5 text-slate-400 hover:text-amber-300 rounded-lg hover:bg-slate-800"
+                            className="p-2.5 text-slate-400 hover:text-amber-300 rounded-lg hover:bg-slate-800"
                           >
                             <Unplug className="w-4 h-4" />
                           </button>
@@ -1176,7 +1179,7 @@ export default function GameDashboardPage() {
                             type="button"
                             onClick={() => accionEquipoSala(team, 'DELETE')}
                             title="Quitar de la partida"
-                            className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                            className="p-2.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
                           >
                             <UserMinus className="w-4 h-4" />
                           </button>
@@ -1244,7 +1247,7 @@ export default function GameDashboardPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
-                    <h2 className="font-bold text-base text-white flex items-center gap-2">
+                    <h2 className="font-bold text-base text-white flex items-center gap-2 flex-wrap">
                       Cupón de Decisiones: <span className="text-emerald-400">{activeTeam.nombre}</span>
                     </h2>
                   </div>
@@ -1349,7 +1352,7 @@ export default function GameDashboardPage() {
                         </button>
                       ))}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-2 font-mono flex justify-between">
+                    <div className="text-[10px] text-slate-400 mt-2 font-mono flex justify-between gap-3">
                       <span>Producirás: <strong>{Math.round(activeTeam.planta * 0.02 * (numero(nivelProd) / 100))} unid.</strong></span>
                       <span>Capacidad: {Math.round(activeTeam.planta * 0.02)} u.</span>
                     </div>
@@ -1420,7 +1423,7 @@ export default function GameDashboardPage() {
                       min={0}
                       value={amplPlanta}
                       onChange={e => setAmplPlanta(leerCampo(e.target.value))}
-                      placeholder="$ Nueva inversión en planta"
+                      placeholder="$ Monto a invertir"
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                     />
                     {!game.modoCompetitivo && (
@@ -1637,32 +1640,32 @@ export default function GameDashboardPage() {
                     <div className="bg-slate-800/50 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
                       <span className="font-bold text-slate-300 block mb-1">Estimación de Caja al Cierre de Ronda:</span>
                       
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between gap-3 text-slate-400">
                         <span>Ingresos por Ventas Estimadas:</span>
                         <span className="font-mono text-emerald-400">+${Math.round(calculoPreventivo.estado_resultados.ventas).toLocaleString()}</span>
                       </div>
 
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between gap-3 text-slate-400">
                         <span>Costo de Producción:</span>
                         <span className="font-mono text-slate-300">-${Math.round(calculoPreventivo.estado_resultados.costo_merc_vend).toLocaleString()}</span>
                       </div>
 
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between gap-3 text-slate-400">
                         <span>Gastos Comerciales y de I+D:</span>
                         <span className="font-mono text-slate-300">-${(numero(marketing) + numero(invDes) + numero(capacitacion)).toLocaleString()}</span>
                       </div>
 
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between gap-3 text-slate-400">
                         <span>Mantenimiento de Planta:</span>
                         <span className="font-mono text-slate-300">-${Math.round(calculoPreventivo.estado_resultados.mantenimiento).toLocaleString()}</span>
                       </div>
 
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between gap-3 text-slate-400">
                         <span>Intereses Bancarios:</span>
                         <span className="font-mono text-rose-400">-${Math.round(calculoPreventivo.estado_resultados.intereses).toLocaleString()}</span>
                       </div>
 
-                      <div className="border-t border-slate-700 pt-2 flex justify-between font-bold text-sm">
+                      <div className="border-t border-slate-700 pt-2 flex justify-between gap-3 font-bold text-sm">
                         <span>Efectivo Proyectado Final:</span>
                         <span className={`font-mono ${calculoPreventivo.balance.efectivo < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                           ${Math.round(calculoPreventivo.balance.efectivo).toLocaleString()}
@@ -1673,11 +1676,11 @@ export default function GameDashboardPage() {
                     {/* Capacidad Futura */}
                     <div className="p-3 bg-indigo-950/30 border border-indigo-900/40 rounded-xl text-xs space-y-1">
                       <span className="font-semibold text-indigo-300 block">Evolución para el Período {game.periodoActual + 1}:</span>
-                      <div className="flex justify-between text-slate-400 text-[11px]">
+                      <div className="flex justify-between gap-3 text-slate-400 text-[11px]">
                         <span>Nueva Capacidad de Planta:</span>
                         <strong className="text-white">{calculoPreventivo.proximo_periodo.capacidad} unidades</strong>
                       </div>
-                      <div className="flex justify-between text-slate-400 text-[11px]">
+                      <div className="flex justify-between gap-3 text-slate-400 text-[11px]">
                         <span>Capacitación Acumulada:</span>
                         <strong className="text-purple-400">${calculoPreventivo.proximo_periodo.capacitacion_acumulada.toLocaleString()}</strong>
                       </div>
@@ -1770,72 +1773,72 @@ export default function GameDashboardPage() {
                           </h3>
 
                           <div className="space-y-1.5">
-                            <div className="flex justify-between font-semibold text-white">
+                            <div className="flex justify-between gap-3 font-semibold text-white">
                               <span>Ventas ({rep.reporte_comercial.ventas_realizadas} u. x ${rep.reporte_comercial.precio})</span>
                               <span className="text-emerald-400">${rep.estado_resultados.ventas.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-slate-400">
+                            <div className="flex justify-between gap-3 text-slate-400">
                               <span>(-) Costo de Mercaderías Vendidas (CMV)</span>
                               <span>-${rep.estado_resultados.costo_merc_vend.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between font-bold text-slate-200 border-t border-slate-800 pt-1">
+                            <div className="flex justify-between gap-3 font-bold text-slate-200 border-t border-slate-800 pt-1">
                               <span>(=) Margen Bruto</span>
                               <span className="text-emerald-400">${rep.estado_resultados.margen_bruto.toLocaleString()}</span>
                             </div>
 
-                            <div className="flex justify-between text-emerald-400/90 pt-1">
+                            <div className="flex justify-between gap-3 text-emerald-400/90 pt-1">
                               <span>(+) Subsidios por Empleo ({rep.reporte_produccion.empleados_nuevos} emp.)</span>
                               <span>+${rep.estado_resultados.subsidios.toLocaleString()}</span>
                             </div>
 
                             <div className="pt-2 text-slate-400 space-y-1">
-                              <div className="flex justify-between">
+                              <div className="flex justify-between gap-3">
                                 <span>(-) Marketing</span>
                                 <span>-${rep.estado_resultados.marketing.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between">
+                              <div className="flex justify-between gap-3">
                                 <span>(-) Mantenimiento de Planta</span>
                                 <span>-${rep.estado_resultados.mantenimiento.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between">
+                              <div className="flex justify-between gap-3">
                                 <span>(-) Capacitación</span>
                                 <span>-${rep.estado_resultados.capacitacion.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between">
+                              <div className="flex justify-between gap-3">
                                 <span>(-) Investigación y Desarrollo</span>
                                 <span>-${rep.estado_resultados.inv_des.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-rose-400">
+                              <div className="flex justify-between gap-3 text-rose-400">
                                 <span>(-) Indemnizaciones ({rep.reporte_produccion.empleados_despedidos} emp.)</span>
                                 <span>-${rep.estado_resultados.indemnizaciones.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-amber-400">
+                              <div className="flex justify-between gap-3 text-amber-400">
                                 <span>(-) Mantenimiento de Stock</span>
                                 <span>-${rep.estado_resultados.mantenimiento_stock.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between text-rose-400">
+                              <div className="flex justify-between gap-3 text-rose-400">
                                 <span>(-) Intereses Bancarios</span>
                                 <span>-${rep.estado_resultados.intereses.toLocaleString()}</span>
                               </div>
                               {rep.estado_resultados.penalidad > 0 && (
-                                <div className="flex justify-between text-rose-500 font-bold">
+                                <div className="flex justify-between gap-3 text-rose-500 font-bold">
                                   <span>(-) Multa Giro en Descubierto</span>
                                   <span>-${rep.estado_resultados.penalidad.toLocaleString()}</span>
                                 </div>
                               )}
                             </div>
 
-                            <div className="border-t border-slate-800 pt-2 flex justify-between font-bold text-slate-200">
+                            <div className="border-t border-slate-800 pt-2 flex justify-between gap-3 font-bold text-slate-200">
                               <span>Utilidad antes de Impuestos</span>
                               <span className={rep.estado_resultados.util_antes_imp < 0 ? 'text-rose-400' : 'text-emerald-400'}>
                                 ${rep.estado_resultados.util_antes_imp.toLocaleString()}
                               </span>
                             </div>
-                            <div className="flex justify-between text-slate-400">
+                            <div className="flex justify-between gap-3 text-slate-400">
                               <span>(-) Impuestos a las Ganancias</span>
                               <span>-${rep.estado_resultados.impuestos.toLocaleString()}</span>
                             </div>
-                            <div className="border-t border-emerald-500/40 pt-2 flex justify-between font-bold text-sm bg-slate-800/40 p-2 rounded-lg">
+                            <div className="border-t border-emerald-500/40 pt-2 flex justify-between gap-3 font-bold text-sm bg-slate-800/40 p-2 rounded-lg">
                               <span className="text-white">Utilidad Neta del Período</span>
                               <span className={rep.estado_resultados.util_periodo < 0 ? 'text-rose-400' : 'text-emerald-400'}>
                                 ${rep.estado_resultados.util_periodo.toLocaleString()}
@@ -1855,21 +1858,21 @@ export default function GameDashboardPage() {
                             <div>
                               <span className="font-bold text-slate-300 block mb-1">ACTIVO</span>
                               <div className="space-y-1 text-slate-400 pl-2">
-                                <div className="flex justify-between">
+                                <div className="flex justify-between gap-3">
                                   <span>Efectivo en Caja</span>
                                   <span className={rep.balance.efectivo < 0 ? 'text-rose-400 font-bold' : 'text-white'}>
                                     ${rep.balance.efectivo.toLocaleString()}
                                   </span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between gap-3">
                                   <span>Stock de Productos ({rep.reporte_comercial.stock_unidades} u.)</span>
                                   <span className="text-white">${rep.balance.stock_valorizado.toLocaleString()}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between gap-3">
                                   <span>Planta Fabril</span>
                                   <span className="text-white">${rep.balance.planta.toLocaleString()}</span>
                                 </div>
-                                <div className="border-t border-slate-800 pt-1 flex justify-between font-bold text-emerald-400 text-xs">
+                                <div className="border-t border-slate-800 pt-1 flex justify-between gap-3 font-bold text-emerald-400 text-xs">
                                   <span>TOTAL DEL ACTIVO</span>
                                   <span>${rep.balance.total_activo.toLocaleString()}</span>
                                 </div>
@@ -1879,21 +1882,21 @@ export default function GameDashboardPage() {
                             <div>
                               <span className="font-bold text-slate-300 block mb-1">PASIVO Y PATRIMONIO NETO</span>
                               <div className="space-y-1 text-slate-400 pl-2">
-                                <div className="flex justify-between">
+                                <div className="flex justify-between gap-3">
                                   <span>Préstamos Tomados</span>
                                   <span className="text-white">${rep.balance.prestamos_tomados.toLocaleString()}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between gap-3">
                                   <span>Capital Social</span>
                                   <span className="text-white">${rep.balance.capital.toLocaleString()}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between gap-3">
                                   <span>Utilidad Acumulada</span>
                                   <span className={rep.balance.util_acumulada < 0 ? 'text-rose-400 font-bold' : 'text-cyan-400 font-bold'}>
                                     ${rep.balance.util_acumulada.toLocaleString()}
                                   </span>
                                 </div>
-                                <div className="border-t border-slate-800 pt-1 flex justify-between font-bold text-emerald-400 text-xs">
+                                <div className="border-t border-slate-800 pt-1 flex justify-between gap-3 font-bold text-emerald-400 text-xs">
                                   <span>TOTAL PASIVO + PATRIMONIO</span>
                                   <span>${rep.balance.pasivo_patrimonio.toLocaleString()}</span>
                                 </div>
@@ -2018,7 +2021,7 @@ export default function GameDashboardPage() {
                                       Bot IA
                                     </span>
                                   )}
-                                  <span className={isHuman ? 'font-bold text-white' : 'text-slate-300'}>
+                                  <span className={`inline-block min-w-[9rem] ${isHuman ? 'font-bold text-white' : 'text-slate-300'}`}>
                                     {item.nombre}
                                   </span>
                                 </div>
@@ -2222,7 +2225,7 @@ export default function GameDashboardPage() {
                 </div>
 
                 {/* Selector de Equipo para auditar */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0 w-full md:w-auto">
                   <select
                     value={selectedFeedbackTeamId}
                     onChange={e => {
@@ -2239,7 +2242,7 @@ export default function GameDashboardPage() {
                         setFeedbackData(null);
                       }
                     }}
-                    className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-semibold focus:outline-none focus:border-emerald-500"
+                    className="px-3 py-1.5 w-full sm:w-auto sm:flex-1 md:flex-none min-w-0 md:max-w-[16rem] bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-semibold focus:outline-none focus:border-emerald-500"
                   >
                     {equiposDevolucion.map((t: any) => (
                       <option key={t.id} value={t.id}>
@@ -2251,7 +2254,7 @@ export default function GameDashboardPage() {
                   <button
                     onClick={() => handleGenerarFeedback(selectedFeedbackTeamId)}
                     disabled={generandoFeedback}
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    className="px-4 py-2 w-full sm:w-auto shrink-0 justify-center whitespace-nowrap bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
                   >
                     {generandoFeedback ? (
                       <>
@@ -2686,10 +2689,10 @@ export default function GameDashboardPage() {
       {/* ========================================================================= */}
       {showAddTeamModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative max-h-[85vh] overflow-y-auto">
             <button
               onClick={() => setShowAddTeamModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              className="absolute top-3 right-3 p-2.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -2748,7 +2751,7 @@ export default function GameDashboardPage() {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto">
             <button
               onClick={() => setShowDidacticModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              className="absolute top-3 right-3 p-2.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>

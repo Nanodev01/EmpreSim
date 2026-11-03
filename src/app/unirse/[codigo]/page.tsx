@@ -163,7 +163,7 @@ export default function UnirsePage() {
             )}
 
             {invitacion.esCoordinador && (
-              <Link href={`/game/${invitacion.id}`} className="block text-center text-xs text-slate-400 underline hover:text-white">
+              <Link href={`/game/${invitacion.id}`} className="block py-2 text-center text-xs text-slate-400 underline hover:text-white">
                 Volver a la sala como coordinador
               </Link>
             )}
@@ -178,7 +178,7 @@ export default function UnirsePage() {
         )}
 
         {!invitacion && !cargando && (
-          <Link href="/" className="block text-center text-xs text-slate-400 underline hover:text-white">
+          <Link href="/" className="block py-2 text-center text-xs text-slate-400 underline hover:text-white">
             Volver al inicio
           </Link>
         )}

@@ -592,7 +592,7 @@ export default function LobbyPage() {
                 Unirme
               </button>
             </div>
-            <Link href="/recuperar" className="block text-[11px] text-slate-400 underline hover:text-white">
+            <Link href="/recuperar" className="block py-2 text-[11px] text-slate-400 underline hover:text-white">
               ¿Coordinabas una partida y perdiste el acceso?
             </Link>
           </form>
@@ -660,7 +660,7 @@ export default function LobbyPage() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center space-x-2.5 text-[11px] text-slate-400 mt-1 font-mono">
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-400 mt-1 font-mono">
                         <span>P: <strong className="text-emerald-400">{g.periodoActual}/6</strong></span>
                         <span>•</span>
                         <span>{g.teams?.length || 0} equipos</span>
