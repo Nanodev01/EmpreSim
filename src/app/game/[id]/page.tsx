@@ -47,6 +47,11 @@ import { DecisionesEquipo, NivelProduccion, ResultadoSimulacionEquipo, Resultado
 import { CasoSimulacion, CasoPeriodoConfig } from '@/lib/engine/cases';
 import { FeedbackEquipo } from '@/lib/ai/coach';
 
+type CampoNumerico = number | '';
+
+const numero = (valor: CampoNumerico) => (valor === '' ? 0 : valor);
+const leerCampo = (valor: string): CampoNumerico => (valor === '' ? '' : Number(valor));
+
 export default function GameDashboardPage() {
   const params = useParams();
   const router = useRouter();
@@ -54,6 +59,7 @@ export default function GameDashboardPage() {
 
   const [game, setGame] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [noDisponible, setNoDisponible] = useState(false);
   const [simulando, setSimulando] = useState(false);
   const [guardandoDecision, setGuardandoDecision] = useState(false);
   const [creandoEquipo, setCreandoEquipo] = useState(false);
@@ -74,16 +80,16 @@ export default function GameDashboardPage() {
   const [generandoFeedback, setGenerandoFeedback] = useState(false);
 
   // Decisiones del equipo activo para la ronda actual
-  const [precio, setPrecio] = useState<number>(89);
-  const [marketing, setMarketing] = useState<number>(7000);
-  const [invDes, setInvDes] = useState<number>(1000);
-  const [capacitacion, setCapacitacion] = useState<number>(2000);
-  const [nivelProd, setNivelProd] = useState<NivelProduccion>(75);
-  const [amplPlanta, setAmplPlanta] = useState<number>(0);
-  const [pedPrestA, setPedPrestA] = useState<number>(0);
-  const [devPrestA, setDevPrestA] = useState<number>(0);
-  const [pedPrestB, setPedPrestB] = useState<number>(0);
-  const [devPrestB, setDevPrestB] = useState<number>(0);
+  const [precio, setPrecio] = useState<CampoNumerico>('');
+  const [marketing, setMarketing] = useState<CampoNumerico>('');
+  const [invDes, setInvDes] = useState<CampoNumerico>('');
+  const [capacitacion, setCapacitacion] = useState<CampoNumerico>('');
+  const [nivelProd, setNivelProd] = useState<NivelProduccion | ''>('');
+  const [amplPlanta, setAmplPlanta] = useState<CampoNumerico>('');
+  const [pedPrestA, setPedPrestA] = useState<CampoNumerico>('');
+  const [devPrestA, setDevPrestA] = useState<CampoNumerico>('');
+  const [pedPrestB, setPedPrestB] = useState<CampoNumerico>('');
+  const [devPrestB, setDevPrestB] = useState<CampoNumerico>('');
 
   // Editor del Coordinador (TFMODIFICARDATOS)
   const [editorTasaA, setEditorTasaA] = useState<number>(27);
@@ -105,26 +111,29 @@ export default function GameDashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
 
-  const fetchGame = async (targetTeamId?: string) => {
+  const fetchGame = async () => {
     try {
       const res = await fetch(`/api/games/${gameId}`);
-      if (!res.ok) throw new Error('Game not found');
+      if (!res.ok) {
+        setNoDisponible(true);
+        return;
+      }
       const data = await res.json();
       setGame(data);
 
-      const humanTeams = data.teams?.filter((t: any) => t.esHumano) || [];
-      const currentTeamId = targetTeamId || selectedTeamId || (humanTeams[0]?.id ?? data.teams?.[0]?.id);
-      
-      setSelectedTeamId(currentTeamId);
+      const humanos = data.teams?.filter((t: any) => t.esHumano) || [];
+      const enTurno = humanos.find((t: any) => !t.yaGuardo);
+      const primero = humanos[0]?.id ?? data.teams?.[0]?.id;
+      setSelectedTeamId(enTurno?.id ?? '');
       if (!selectedReportTeamId) {
-        setSelectedReportTeamId(currentTeamId);
+        setSelectedReportTeamId(primero);
       }
       if (!selectedFeedbackTeamId) {
-        setSelectedFeedbackTeamId(currentTeamId);
+        setSelectedFeedbackTeamId(primero);
       }
 
       // Si el equipo ya tiene feedback guardado en BD, cargarlo
-      const fbTeam = data.teams?.find((t: any) => t.id === (targetTeamId || selectedFeedbackTeamId || currentTeamId));
+      const fbTeam = data.teams?.find((t: any) => t.id === (selectedFeedbackTeamId || primero));
       if (fbTeam?.feedbackJson) {
         try {
           setFeedbackData(JSON.parse(fbTeam.feedbackJson));
@@ -135,9 +144,6 @@ export default function GameDashboardPage() {
       if (data.estado === 'finalizada' && activeTab === 'cupon') {
         setActiveTab('resumen');
       }
-
-      // Cargar decisiones existentes del equipo actual
-      cargarDecisionesDeEquipo(currentTeamId, data);
 
       // Inicializar valores del editor del caso
       try {
@@ -159,58 +165,43 @@ export default function GameDashboardPage() {
     }
   };
 
-  const cargarDecisionesDeEquipo = (teamId: string, gameData: any) => {
-    const team = gameData.teams?.find((t: any) => t.id === teamId);
-    if (!team) return;
-
-    const decActual = team.decisions?.find((d: any) => d.periodo === gameData.periodoActual);
-    if (decActual) {
-      setPrecio(decActual.precio);
-      setMarketing(decActual.marketing);
-      setInvDes(decActual.invDes);
-      setCapacitacion(decActual.capacitacion);
-      setNivelProd(decActual.nivelProd as NivelProduccion);
-      setAmplPlanta(decActual.amplPlanta);
-      setPedPrestA(decActual.pedPrestA);
-      setDevPrestA(decActual.devPrestA);
-      setPedPrestB(decActual.pedPrestB);
-      setDevPrestB(decActual.devPrestB);
-    } else if (gameData.periodoActual === 0) {
-      // Defaults clásicos para Período 0
-      setPrecio(89);
-      setMarketing(7000);
-      setInvDes(1000);
-      setCapacitacion(4000);
-      setNivelProd(75);
-      setAmplPlanta(10000);
-      setPedPrestA(50000);
-      setDevPrestA(0);
-      setPedPrestB(50000);
-      setDevPrestB(0);
-    } else {
-      // Defaults conservadores para períodos > 0 si aún no cargó
-      setPrecio(89);
-      setMarketing(6000);
-      setInvDes(1000);
-      setCapacitacion(2000);
-      setNivelProd(75);
-      setAmplPlanta(0);
-      setPedPrestA(0);
-      setDevPrestA(0);
-      setPedPrestB(0);
-      setDevPrestB(0);
-    }
+  const limpiarCupon = () => {
+    setPrecio('');
+    setMarketing('');
+    setInvDes('');
+    setCapacitacion('');
+    setNivelProd('');
+    setAmplPlanta('');
+    setPedPrestA('');
+    setDevPrestA('');
+    setPedPrestB('');
+    setDevPrestB('');
   };
 
-  const handleCambiarEquipoTurno = (teamId: string) => {
-    setSelectedTeamId(teamId);
-    cargarDecisionesDeEquipo(teamId, game);
-  };
-
-  const handleGuardarDecision = async (avanzarSiguiente: boolean = false) => {
+  const handleGuardarDecision = async () => {
     if (!selectedTeamId || !game) return;
 
-    const teamActual = game.teams?.find((t: any) => t.id === selectedTeamId);
+    const bloqueaDevolucion = game.periodoActual === 0;
+    const faltantes = [
+      precio === '' && 'Precio',
+      marketing === '' && 'Marketing',
+      nivelProd === '' && 'Nivel de producción',
+      capacitacion === '' && 'Capacitación',
+      invDes === '' && 'I+D',
+      amplPlanta === '' && 'Ampliación de planta',
+      pedPrestA === '' && 'Pedido de préstamo A',
+      !bloqueaDevolucion && devPrestA === '' && 'Devolución de préstamo A',
+      pedPrestB === '' && 'Pedido de préstamo B',
+      !bloqueaDevolucion && devPrestB === '' && 'Devolución de préstamo B'
+    ].filter(Boolean);
+    if (faltantes.length > 0) {
+      alert(`Completá todos los campos antes de guardar (poné 0 si no corresponde):\n\n${faltantes.join('\n')}`);
+      return;
+    }
+
+    const equipoActual = game.teams?.find((t: any) => t.id === selectedTeamId);
+    const siguiente = game.teams?.find((t: any) => t.esHumano && !t.yaGuardo && t.id !== selectedTeamId);
+
     setGuardandoDecision(true);
     try {
       const res = await fetch(`/api/games/${gameId}/decisions`, {
@@ -226,40 +217,30 @@ export default function GameDashboardPage() {
           nivelProd,
           amplPlanta,
           pedPrestA,
-          devPrestA,
+          devPrestA: numero(devPrestA),
           pedPrestB,
-          devPrestB
+          devPrestB: numero(devPrestB)
         })
       });
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Error al guardar decisiones');
-      } else {
-        await fetchGame(selectedTeamId);
-
-        if (avanzarSiguiente) {
-          // Buscar el siguiente equipo humano que falte cargar
-          const humanTeams = game.teams?.filter((t: any) => t.esHumano) || [];
-          const currentIdx = humanTeams.findIndex((t: any) => t.id === selectedTeamId);
-          const nextTeam = humanTeams[(currentIdx + 1) % humanTeams.length];
-
-          if (nextTeam && nextTeam.id !== selectedTeamId) {
-            setSelectedTeamId(nextTeam.id);
-            cargarDecisionesDeEquipo(nextTeam.id, game);
-            setMensajeTurno(`✅ Guardado para ${teamActual?.nombre || 'el equipo'}. ¡Turno de ${nextTeam.nombre}!`);
-            setTimeout(() => setMensajeTurno(null), 4000);
-          } else {
-            setMensajeTurno(`🎉 ¡Todos los equipos completaron su carga!`);
-            setTimeout(() => setMensajeTurno(null), 4000);
-          }
-        } else {
-          setMensajeTurno(`✅ Cupón guardado para ${teamActual?.nombre || 'el equipo'}.`);
-          setTimeout(() => setMensajeTurno(null), 3000);
-        }
+        alert(err.error || 'Error al guardar los resultados');
+        return;
       }
+
+      // El cupón se vacía antes de mostrar la tarjeta siguiente: nadie ve lo que cargó el equipo anterior.
+      limpiarCupon();
+      await fetchGame();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setMensajeTurno(
+        siguiente
+          ? `✅ Guardado para ${equipoActual?.nombre}. ¡Turno de ${siguiente.nombre}!`
+          : '🎉 ¡Todos los equipos guardaron sus resultados!'
+      );
+      setTimeout(() => setMensajeTurno(null), 4000);
     } catch (err) {
-      alert('Error de red al guardar decisiones');
+      alert('Error de red al guardar los resultados');
     } finally {
       setGuardandoDecision(false);
     }
@@ -288,7 +269,7 @@ export default function GameDashboardPage() {
       const nuevoEquipo = await res.json();
       setNuevoEquipoNombre('');
       setShowAddTeamModal(false);
-      await fetchGame(nuevoEquipo.id);
+      await fetchGame();
       setMensajeTurno(`🎉 ¡Equipo "${nuevoEquipo.nombre}" agregado con éxito!`);
       setTimeout(() => setMensajeTurno(null), 4000);
     } catch (err: any) {
@@ -298,41 +279,36 @@ export default function GameDashboardPage() {
     }
   };
 
-  const handleSimularRonda = async () => {
+  const handleFinalizarCiclo = async () => {
     if (!game) return;
 
-    // Verificar si algún equipo humano no ha cargado decisiones
-    const humanTeams = game.teams?.filter((t: any) => t.esHumano) || [];
-    const equiposPendientes = humanTeams.filter((t: any) => {
-      const dec = t.decisions?.find((d: any) => d.periodo === game.periodoActual);
-      return !dec;
-    });
-
-    if (equiposPendientes.length > 0) {
-      const nombres = equiposPendientes.map((t: any) => `"${t.nombre}"`).join(', ');
-      alert(`⚠️ Aún faltan cargar las decisiones de los siguientes equipos para el Período ${game.periodoActual}:\n\n${nombres}\n\nCada equipo debe ingresar sus 10 decisiones en su turno antes de simular el mercado.`);
-      return;
-    }
-
-    if (!confirm(`¿Confirmas la ejecución de la simulación del Período ${game.periodoActual}? Todos los equipos competirán simultáneamente en el mercado.`)) {
-      return;
-    }
+    const aviso = game.modoCompetitivo
+      ? `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se pasa a la ronda siguiente.`
+      : `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se muestran los resultados.`;
+    if (!confirm(aviso)) return;
 
     setSimulando(true);
     try {
-      const res = await fetch(`/api/games/${gameId}/simulate`, {
-        method: 'POST'
-      });
-
+      const res = await fetch(`/api/games/${gameId}/simulate`, { method: 'POST' });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Error al simular la ronda');
-      } else {
-        await fetchGame();
+        alert(err.error || 'Error al finalizar el ciclo');
+        return;
+      }
+
+      const { proximoPeriodo } = await res.json();
+      await fetchGame();
+      if (!game.modoCompetitivo) {
         setActiveTab('mercado');
+      } else if (proximoPeriodo > 6) {
+        setActiveTab('resumen');
+      } else {
+        setActiveTab('cupon');
+        setMensajeTurno(`🔥 Ciclo terminado. Comienza el Período ${proximoPeriodo}.`);
+        setTimeout(() => setMensajeTurno(null), 4000);
       }
     } catch (err) {
-      alert('Error de red al simular la ronda');
+      alert('Error de red al finalizar el ciclo');
     } finally {
       setSimulando(false);
     }
@@ -433,6 +409,9 @@ export default function GameDashboardPage() {
       if (res.ok) {
         alert('✅ Parámetros macroeconómicos actualizados con éxito.');
         fetchGame();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Error al actualizar caso');
       }
     } catch (err) {
       alert('Error al actualizar caso');
@@ -449,8 +428,11 @@ export default function GameDashboardPage() {
       });
       if (res.ok) {
         await fetchGame();
-        setMensajeTurno(nuevoModo ? '🔥 Modo Competitivo activado: Calculadora y pistas desactivadas.' : '🎓 Modo Didáctico activado: Calculadora y ayudas habilitadas.');
+        setMensajeTurno(nuevoModo ? '🔥 Modo Competitivo activado: Calculadora y pistas desactivadas.' : '🎓 Modo Práctica activado: Calculadora y ayudas habilitadas.');
         setTimeout(() => setMensajeTurno(null), 4000);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Error al cambiar modo');
       }
     } catch {
       alert('Error al cambiar modo');
@@ -505,16 +487,17 @@ export default function GameDashboardPage() {
 
   // Contador de equipos listos para la ronda
   const equiposListosCount = useMemo(() => {
-    return humanTeams.filter((t: any) => 
-      t.decisions?.some((d: any) => d.periodo === game?.periodoActual)
-    ).length;
-  }, [humanTeams, game?.periodoActual]);
+    return humanTeams.filter((t: any) => t.yaGuardo).length;
+  }, [humanTeams]);
 
   const todosListos = humanTeams.length > 0 && equiposListosCount === humanTeams.length;
+  const enCurso = game?.estado !== 'finalizada';
+  const cicloCompleto = todosListos && enCurso;
+  const resultadosOcultos = Boolean(game?.modoCompetitivo) && enCurso;
 
   // Calculadora Preventiva para el equipo activo (evitar cálculo si está en modo competitivo)
   const calculoPreventivo = useMemo(() => {
-    if (!casoConfig || !activeTeam || game?.modoCompetitivo) return null;
+    if (!casoConfig || !activeTeam || game?.modoCompetitivo || precio === '' || nivelProd === '') return null;
     try {
       const ordenesEstimadas = 1000;
       return SimuladorEmpresarial.simularPeriodoEquipo(
@@ -534,15 +517,15 @@ export default function GameDashboardPage() {
         },
         {
           precio,
-          marketing,
-          inv_des: invDes,
-          capacitacion,
+          marketing: numero(marketing),
+          inv_des: numero(invDes),
+          capacitacion: numero(capacitacion),
           nivel_prod: nivelProd,
-          ampl_planta: amplPlanta,
-          ped_prest_a: pedPrestA,
-          dev_prest_a: devPrestA,
-          ped_prest_b: pedPrestB,
-          dev_prest_b: devPrestB
+          ampl_planta: numero(amplPlanta),
+          ped_prest_a: numero(pedPrestA),
+          dev_prest_a: numero(devPrestA),
+          ped_prest_b: numero(pedPrestB),
+          dev_prest_b: numero(devPrestB)
         },
         ordenesEstimadas,
         casoConfig.config_bancos
@@ -583,6 +566,20 @@ export default function GameDashboardPage() {
     if (!game?.teams) return [];
     return [...game.teams].sort((a, b) => b.utilidadAcumulada - a.utilidadAcumulada);
   }, [game?.teams]);
+
+  if (noDisponible) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 text-center px-6 gap-4">
+        <AlertCircle className="w-8 h-8 text-amber-400" />
+        <p className="text-sm font-medium max-w-md">
+          Esta partida no existe o fue creada desde otro navegador. Cada partida solo se puede abrir desde el navegador donde se creó.
+        </p>
+        <Link href="/" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl">
+          Volver al inicio
+        </Link>
+      </div>
+    );
+  }
 
   if (loading || !game || !activeTeam) {
     return (
@@ -636,12 +633,12 @@ export default function GameDashboardPage() {
                   </span>
                 ) : (
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold flex items-center gap-1">
-                    <GraduationCap className="w-3 h-3 text-emerald-400" /> Modo Didáctico
+                    <GraduationCap className="w-3 h-3 text-emerald-400" /> Modo Práctica
                   </span>
                 )}
               </div>
               <span className="text-xs text-slate-400 block font-mono">
-                {humanTeams.length} Equipos de Alumnos • {game.rounds?.length || 0} Rondas Simuladas
+                {humanTeams.length} Equipos de Alumnos • {game.periodoActual} Rondas Simuladas
               </span>
             </div>
           </div>
@@ -660,7 +657,7 @@ export default function GameDashboardPage() {
             {game.estado !== 'finalizada' && (
               <button
                 onClick={handleFinalizarPartida}
-                disabled={finalizando || game.rounds.length === 0}
+                disabled={finalizando || game.periodoActual === 0}
                 className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 text-xs font-semibold border border-slate-700 hover:border-rose-500/30 transition-all disabled:opacity-40"
                 title="Cerrar el certamen y proclamar ganadores"
               >
@@ -669,28 +666,17 @@ export default function GameDashboardPage() {
               </button>
             )}
 
-            {game.estado !== 'finalizada' ? (
-              <button
-                onClick={handleSimularRonda}
-                disabled={simulando || game.periodoActual > 6}
-                className={`px-4 py-2 rounded-xl font-bold text-xs shadow-lg flex items-center gap-2 transition-all disabled:opacity-50 ${
-                  todosListos 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-emerald-500/20 ring-2 ring-emerald-400/40 animate-pulse'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                }`}
-              >
-                {simulando ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Simulando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Simular Ronda {game.periodoActual}</span>
-                  </>
-                )}
-              </button>
+            {enCurso ? (
+              cicloCompleto && (
+                <button
+                  onClick={handleFinalizarCiclo}
+                  disabled={simulando}
+                  className="px-4 py-2 rounded-xl font-bold text-xs shadow-lg flex items-center gap-2 transition-all disabled:opacity-50 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-emerald-500/20"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>{simulando ? 'Procesando...' : 'Finalizar el ciclo'}</span>
+                </button>
+              )
             ) : (
               <button
                 onClick={() => setActiveTab('resumen')}
@@ -738,26 +724,24 @@ export default function GameDashboardPage() {
 
               {humanTeams.map((team: any, idx: number) => {
                 const isSelected = team.id === selectedTeamId;
-                const hasSubmitted = team.decisions?.some((d: any) => d.periodo === game.periodoActual);
                 const color = getTeamBadgeColor(idx);
 
                 return (
-                  <button
+                  <div
                     key={team.id}
-                    onClick={() => handleCambiarEquipoTurno(team.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-2 transition-all shrink-0 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border flex items-center gap-2 shrink-0 ${
                       isSelected
                         ? `ring-2 ${color.active} text-white shadow-md`
-                        : hasSubmitted
-                          ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:border-slate-600'
-                          : 'bg-slate-900/60 border-slate-800 text-slate-500 hover:border-slate-700'
+                        : team.yaGuardo
+                          ? 'bg-slate-800/80 border-slate-700 text-slate-300'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-500'
                     }`}
                   >
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${color.bg} ${color.text}`}>
                       {idx + 1}
                     </span>
                     <span className="font-semibold">{team.nombre}</span>
-                    {hasSubmitted ? (
+                    {team.yaGuardo ? (
                       <span className="flex items-center text-[10px] text-emerald-400 font-bold gap-0.5">
                         <Check className="w-3 h-3 stroke-[3]" /> Listo
                       </span>
@@ -766,10 +750,11 @@ export default function GameDashboardPage() {
                         {isSelected ? 'Cargando...' : 'Pendiente'}
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               })}
 
+              {game.periodoActual === 0 && (
               <button
                 onClick={() => setShowAddTeamModal(true)}
                 className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-700 hover:border-emerald-500/60 bg-slate-900/40 text-slate-400 hover:text-emerald-400 text-xs font-semibold flex items-center gap-1 transition-colors shrink-0"
@@ -778,6 +763,7 @@ export default function GameDashboardPage() {
                 <Plus className="w-3.5 h-3.5" />
                 <span>Sumar Equipo</span>
               </button>
+              )}
             </div>
 
             {/* Progreso de Carga */}
@@ -808,6 +794,7 @@ export default function GameDashboardPage() {
       )}
 
       {/* KPI Cards Bar del Equipo Activo */}
+      {!cicloCompleto && (
       <section className="bg-slate-900/40 border-b border-slate-800/80 py-4 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-2">
@@ -865,10 +852,12 @@ export default function GameDashboardPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Navigation Tabs */}
       <div className="border-b border-slate-800 bg-slate-900/40 px-6">
         <div className="max-w-7xl mx-auto flex space-x-2 overflow-x-auto pb-1 sm:pb-0">
+          {enCurso && (
           <button
             onClick={() => setActiveTab('cupon')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -880,7 +869,10 @@ export default function GameDashboardPage() {
             <Sliders className="w-4 h-4" />
             Cupón de Decisiones y Calculadora
           </button>
+          )}
 
+          {!resultadosOcultos && (
+          <>
           <button
             onClick={() => setActiveTab('reporte')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -919,6 +911,8 @@ export default function GameDashboardPage() {
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             )}
           </button>
+          </>
+          )}
 
           <button
             onClick={() => setActiveTab('coordinador')}
@@ -940,7 +934,28 @@ export default function GameDashboardPage() {
         {/* ========================================================================= */}
         {/* TAB 1: CUPÓN DE DECISIONES + CALCULADORA PREVENTIVA EN VIVO */}
         {/* ========================================================================= */}
-        {activeTab === 'cupon' && (
+        {activeTab === 'cupon' && cicloCompleto && (
+          <div className="max-w-2xl mx-auto bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-8 shadow-xl text-center space-y-4">
+            <CheckCheck className="w-10 h-10 mx-auto text-emerald-400" />
+            <h2 className="font-bold text-lg text-white">Todos los equipos guardaron sus resultados</h2>
+            <p className="text-sm text-slate-400">
+              {game.modoCompetitivo
+                ? 'Al finalizar el ciclo se simula el mercado y comienza la ronda siguiente. Los resultados se publican al terminar la partida.'
+                : 'Al finalizar el ciclo se simula el mercado y se muestran los resultados de la ronda.'}
+            </p>
+            <button
+              type="button"
+              onClick={handleFinalizarCiclo}
+              disabled={simulando}
+              className="px-6 py-3 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold text-sm rounded-xl shadow-lg shadow-emerald-500/20 inline-flex items-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>{simulando ? 'Procesando...' : 'Finalizar el ciclo'}</span>
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'cupon' && !cicloCompleto && enCurso && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
             {/* Formulario de Entrada */}
@@ -954,43 +969,11 @@ export default function GameDashboardPage() {
                     </h2>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Período {game.periodoActual} • Ingresa las 10 decisiones estratégicas de tu empresa.
+                    Período {game.periodoActual} • Completá las decisiones de tu empresa y guardá. Al guardar, los valores se ocultan y sigue el próximo equipo.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleGuardarDecision(false)}
-                    disabled={guardandoDecision || game.estado === 'finalizada'}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 transition-colors disabled:opacity-40"
-                  >
-                    {guardandoDecision ? 'Guardando...' : 'Guardar'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleGuardarDecision(true)}
-                    disabled={guardandoDecision || game.estado === 'finalizada'}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all disabled:opacity-40"
-                  >
-                    <span>Guardar y Siguiente Turno</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
-
-              {game.estado === 'finalizada' && (
-                <div className="mb-6 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center justify-between">
-                  <span>Partida Finalizada: Ya no se pueden modificar las decisiones de esta partida.</span>
-                  <button
-                    onClick={() => setActiveTab('resumen')}
-                    className="underline font-bold hover:text-white"
-                  >
-                    Ver Informe Final
-                  </button>
-                </div>
-              )}
 
               <div className="space-y-5">
                 {/* 1. Precio y Marketing */}
@@ -1000,15 +983,15 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         1. Precio de Venta ($50 a $100 u$s)
                       </label>
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold">${precio} u$s</span>
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold">{precio === '' ? 'Sin completar' : `$${precio} u$s`}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <input
                         type="range"
                         min={50}
                         max={100}
-                        value={precio}
-                        onChange={e => setPrecio(Number(e.target.value))}
+                        value={precio === '' ? 50 : precio}
+                        onChange={e => setPrecio(leerCampo(e.target.value))}
                         className="flex-1 accent-emerald-500"
                       />
                       <input
@@ -1016,7 +999,7 @@ export default function GameDashboardPage() {
                         min={50}
                         max={100}
                         value={precio}
-                        onChange={e => setPrecio(Number(e.target.value))}
+                        onChange={e => setPrecio(leerCampo(e.target.value))}
                         className="w-16 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-sm text-center font-bold text-emerald-400 font-mono"
                       />
                     </div>
@@ -1032,7 +1015,7 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         2. Marketing ($0 a $10.000 u$s)
                       </label>
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold">${marketing.toLocaleString()}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold">${numero(marketing).toLocaleString()}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <input
@@ -1040,8 +1023,8 @@ export default function GameDashboardPage() {
                         min={0}
                         max={10000}
                         step={500}
-                        value={marketing}
-                        onChange={e => setMarketing(Number(e.target.value))}
+                        value={numero(marketing)}
+                        onChange={e => setMarketing(leerCampo(e.target.value))}
                         className="flex-1 accent-emerald-500"
                       />
                       <input
@@ -1050,7 +1033,7 @@ export default function GameDashboardPage() {
                         max={10000}
                         step={100}
                         value={marketing}
-                        onChange={e => setMarketing(Number(e.target.value))}
+                        onChange={e => setMarketing(leerCampo(e.target.value))}
                         className="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-sm text-center font-bold text-emerald-400 font-mono"
                       />
                     </div>
@@ -1066,7 +1049,7 @@ export default function GameDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-800">
                     <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                      3. Nivel de Producción ({nivelProd}%)
+                      3. Nivel de Producción ({nivelProd === '' ? 'sin elegir' : `${nivelProd}%`})
                     </label>
                     <div className="grid grid-cols-5 gap-1.5">
                       {[0, 25, 50, 75, 100].map(lvl => (
@@ -1085,7 +1068,7 @@ export default function GameDashboardPage() {
                       ))}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-2 font-mono flex justify-between">
-                      <span>Producirás: <strong>{Math.round(activeTeam.planta * 0.02 * (nivelProd / 100))} unid.</strong></span>
+                      <span>Producirás: <strong>{Math.round(activeTeam.planta * 0.02 * (numero(nivelProd) / 100))} unid.</strong></span>
                       <span>Capacidad: {Math.round(activeTeam.planta * 0.02)} u.</span>
                     </div>
                   </div>
@@ -1095,13 +1078,14 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         4. Capacitación ($0 a $20.000)
                       </label>
-                      <span className="text-[10px] text-purple-400 font-mono font-bold">${capacitacion.toLocaleString()}</span>
+                      <span className="text-[10px] text-purple-400 font-mono font-bold">${numero(capacitacion).toLocaleString()}</span>
                     </div>
                     <select
                       value={capacitacion}
-                      onChange={e => setCapacitacion(Number(e.target.value))}
+                      onChange={e => setCapacitacion(leerCampo(e.target.value))}
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                     >
+                      <option value="" disabled>Elegí un monto</option>
                       {[0, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000].map(val => (
                         <option key={val} value={val}>
                           ${val.toLocaleString()} {val === 0 ? '(Sin inversión)' : `(Paso ${val/2000})`}
@@ -1123,14 +1107,14 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         5. Investigación y Desarrollo (I+D)
                       </label>
-                      <span className="text-[10px] text-teal-400 font-mono font-bold">${invDes.toLocaleString()}</span>
+                      <span className="text-[10px] text-teal-400 font-mono font-bold">${numero(invDes).toLocaleString()}</span>
                     </div>
                     <input
                       type="number"
                       step={500}
                       min={0}
                       value={invDes}
-                      onChange={e => setInvDes(Number(e.target.value))}
+                      onChange={e => setInvDes(leerCampo(e.target.value))}
                       placeholder="$ Inversión en I+D"
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                     />
@@ -1146,14 +1130,14 @@ export default function GameDashboardPage() {
                       <label className="text-xs font-semibold text-slate-300">
                         6. Ampliación de Planta ($)
                       </label>
-                      <span className="text-[10px] text-cyan-400 font-mono font-bold">+${amplPlanta.toLocaleString()}</span>
+                      <span className="text-[10px] text-cyan-400 font-mono font-bold">+${numero(amplPlanta).toLocaleString()}</span>
                     </div>
                     <input
                       type="number"
                       step={5000}
                       min={0}
                       value={amplPlanta}
-                      onChange={e => setAmplPlanta(Number(e.target.value))}
+                      onChange={e => setAmplPlanta(leerCampo(e.target.value))}
                       placeholder="$ Nueva inversión en planta"
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                     />
@@ -1181,7 +1165,7 @@ export default function GameDashboardPage() {
                         min={0}
                         step={1000}
                         value={pedPrestA}
-                        onChange={e => setPedPrestA(Number(e.target.value))}
+                        onChange={e => setPedPrestA(leerCampo(e.target.value))}
                         className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                       />
                     </div>
@@ -1194,7 +1178,7 @@ export default function GameDashboardPage() {
                         step={1000}
                         disabled={game.periodoActual === 0}
                         value={devPrestA}
-                        onChange={e => setDevPrestA(Number(e.target.value))}
+                        onChange={e => setDevPrestA(leerCampo(e.target.value))}
                         placeholder={game.periodoActual === 0 ? "Bloqueado en P0" : "0"}
                         className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-40"
                       />
@@ -1215,7 +1199,7 @@ export default function GameDashboardPage() {
                         min={0}
                         step={1000}
                         value={pedPrestB}
-                        onChange={e => setPedPrestB(Number(e.target.value))}
+                        onChange={e => setPedPrestB(leerCampo(e.target.value))}
                         className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                       />
                     </div>
@@ -1228,7 +1212,7 @@ export default function GameDashboardPage() {
                         step={1000}
                         disabled={game.periodoActual === 0}
                         value={devPrestB}
-                        onChange={e => setDevPrestB(Number(e.target.value))}
+                        onChange={e => setDevPrestB(leerCampo(e.target.value))}
                         placeholder={game.periodoActual === 0 ? "Bloqueado en P0" : "0"}
                         className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-40"
                       />
@@ -1243,11 +1227,11 @@ export default function GameDashboardPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => handleGuardarDecision(true)}
-                    disabled={guardandoDecision || game.estado === 'finalizada'}
+                    onClick={handleGuardarDecision}
+                    disabled={guardandoDecision}
                     className="px-5 py-2.5 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all disabled:opacity-40"
                   >
-                    <span>Confirmar Cupón y Pasar Turno</span>
+                    <span>{guardandoDecision ? 'Guardando...' : 'Guardar resultados'}</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -1383,7 +1367,7 @@ export default function GameDashboardPage() {
 
                       <div className="flex justify-between text-slate-400">
                         <span>Gastos Comerciales y de I+D:</span>
-                        <span className="font-mono text-slate-300">-${(marketing + invDes + capacitacion).toLocaleString()}</span>
+                        <span className="font-mono text-slate-300">-${(numero(marketing) + numero(invDes) + numero(capacitacion)).toLocaleString()}</span>
                       </div>
 
                       <div className="flex justify-between text-slate-400">
@@ -1419,7 +1403,7 @@ export default function GameDashboardPage() {
                   </div>
                 ) : (
                   <div className="py-8 text-center text-xs text-slate-500">
-                    Calculando proyecciones financieras...
+                    Completá el precio y el nivel de producción para ver la proyección.
                   </div>
                 )}
               </div>
@@ -1673,6 +1657,17 @@ export default function GameDashboardPage() {
         {/* ========================================================================= */}
         {activeTab === 'mercado' && (
           <div className="space-y-6">
+            {enCurso && ultimoReporte && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setActiveTab('cupon')}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all"
+                >
+                  <span>Continuar con el Período {game.periodoActual}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             {ultimoReporte ? (
               <>
                 {/* Ranking del Mercado */}
@@ -1877,7 +1872,7 @@ export default function GameDashboardPage() {
                   {game.estado !== 'finalizada' && (
                     <button
                       onClick={handleFinalizarPartida}
-                      disabled={finalizando || game.rounds.length === 0}
+                      disabled={finalizando || game.periodoActual === 0}
                       className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/20 flex items-center gap-1.5 transition-all disabled:opacity-40"
                     >
                       <Flag className="w-4 h-4" />
@@ -2228,7 +2223,7 @@ export default function GameDashboardPage() {
               </p>
             </div>
 
-            {/* Control de Modo: Didáctico vs Competitivo */}
+            {/* Control de Modo: Práctica vs Competitivo */}
             <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
               game.modoCompetitivo 
                 ? 'bg-amber-500/10 border-amber-500/40 text-amber-200' 
@@ -2245,7 +2240,7 @@ export default function GameDashboardPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-white">
-                      Modo Actual: {game.modoCompetitivo ? '🔥 Modo Competitivo (Sin Ayudas)' : '🎓 Modo Didáctico (Con Asistencias)'}
+                      Modo Actual: {game.modoCompetitivo ? '🔥 Modo Competitivo (Sin Ayudas)' : '🎓 Modo Práctica (Con Asistencias)'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
@@ -2259,14 +2254,16 @@ export default function GameDashboardPage() {
               <button
                 type="button"
                 onClick={handleToggleModoCompetitivo}
-                className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md shrink-0 flex items-center gap-2 ${
+                disabled={game.periodoActual > 0 || equiposListosCount > 0}
+                title="El modo solo se puede cambiar antes de que algún equipo cargue sus decisiones"
+                className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md shrink-0 flex items-center gap-2 disabled:opacity-40 ${
                   game.modoCompetitivo
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
                     : 'bg-amber-400 hover:bg-amber-300 text-amber-950 shadow-amber-500/20'
                 }`}
               >
                 <Swords className="w-4 h-4" />
-                <span>{game.modoCompetitivo ? 'Cambiar a Modo Didáctico' : 'Activar Modo Competitivo'}</span>
+                <span>{game.modoCompetitivo ? 'Cambiar a Modo Práctica' : 'Activar Modo Competitivo'}</span>
               </button>
             </div>
 

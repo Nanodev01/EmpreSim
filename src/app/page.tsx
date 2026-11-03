@@ -182,7 +182,7 @@ export default function LobbyPage() {
           <div className="flex items-center space-x-3">
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-xs font-medium text-emerald-400">
               <GraduationCap className="w-3.5 h-3.5" />
-              <span>Modo Didáctico para Alumnos</span>
+              <span>Simulador para Alumnos</span>
             </div>
           </div>
         </div>
@@ -464,7 +464,7 @@ export default function LobbyPage() {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    Oculta la calculadora preventiva en vivo y las pistas de estrategia. Los alumnos deberán proyectar sus costos y flujo de caja manualmente.
+                    Oculta la calculadora preventiva, las pistas y los resultados de cada ronda hasta el final de la partida. Los alumnos deberán proyectar sus costos y flujo de caja manualmente.
                   </p>
                 </div>
 
