@@ -2,5 +2,17 @@ node_modules
 .next
 .git
 .gitignore
+.github
 *.log
 .DS_Store
+
+# Secretos y datos locales: nunca deben quedar dentro de la imagen
+.env
+.env.*
+!.env.example
+prisma/*.db
+prisma/*.db-*
+
+docs
+README.md
+tsconfig.tsbuildinfo
