@@ -35,7 +35,6 @@ import {
   X,
   Check,
   Flag,
-  Key,
   Settings,
   Layers,
   CheckCheck,
@@ -69,13 +68,10 @@ export default function GameDashboardPage() {
   const [showDidacticModal, setShowDidacticModal] = useState<boolean>(false);
   const [mensajeTurno, setMensajeTurno] = useState<string | null>(null);
 
-  // Módulo de Resumen, Recomendaciones y Gemini AI
+  // Módulo de Resumen y Recomendaciones
   const [selectedFeedbackTeamId, setSelectedFeedbackTeamId] = useState<string>('');
   const [feedbackData, setFeedbackData] = useState<FeedbackEquipo | null>(null);
   const [generandoFeedback, setGenerandoFeedback] = useState(false);
-  const [showConfigApiKeyModal, setShowConfigApiKeyModal] = useState(false);
-  const [apiKeyGemini, setApiKeyGemini] = useState<string>('');
-  const [modeloGemini, setModeloGemini] = useState<string>('gemini-2.5-flash');
 
   // Decisiones del equipo activo para la ronda actual
   const [precio, setPrecio] = useState<number>(89);
@@ -100,18 +96,11 @@ export default function GameDashboardPage() {
   const [editorFactorDemanda, setEditorFactorDemanda] = useState<number>(55);
 
   useEffect(() => {
-    // Cargar credenciales guardadas en el navegador
-    if (typeof window !== 'undefined') {
-      const savedKey = localStorage.getItem('SIMULADOR_GEMINI_KEY');
-      if (savedKey) setApiKeyGemini(savedKey);
-      const savedModel = localStorage.getItem('SIMULADOR_GEMINI_MODEL');
-      if (savedModel === 'gemini-2.0-flash') {
-        setModeloGemini('gemini-2.5-flash');
-        localStorage.setItem('SIMULADOR_GEMINI_MODEL', 'gemini-2.5-flash');
-      } else if (savedModel) {
-        setModeloGemini(savedModel);
-      }
-    }
+    // Versiones anteriores guardaban la clave de IA en el navegador: se elimina.
+    try {
+      localStorage.removeItem('SIMULADOR_GEMINI_KEY');
+      localStorage.removeItem('SIMULADOR_GEMINI_MODEL');
+    } catch {}
     fetchGame();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId]);
@@ -400,12 +389,7 @@ export default function GameDashboardPage() {
       const res = await fetch(`/api/games/${gameId}/coach`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teamId: tid,
-          apiKey: apiKeyGemini.trim() || undefined,
-          provider: 'gemini',
-          model: modeloGemini
-        })
+        body: JSON.stringify({ teamId: tid })
       });
 
       if (!res.ok) {
@@ -423,17 +407,6 @@ export default function GameDashboardPage() {
     } finally {
       setGenerandoFeedback(false);
     }
-  };
-
-  const handleGuardarConfigApiKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('SIMULADOR_GEMINI_KEY', apiKeyGemini.trim());
-      localStorage.setItem('SIMULADOR_GEMINI_MODEL', modeloGemini);
-    }
-    setShowConfigApiKeyModal(false);
-    setMensajeTurno('🔑 Configuración de IA guardada con éxito.');
-    setTimeout(() => setMensajeTurno(null), 3000);
   };
 
   const handleGuardarConfiguracionCaso = async () => {
@@ -674,14 +647,6 @@ export default function GameDashboardPage() {
           </div>
 
           <div className="flex items-center space-x-2.5">
-            <button
-              onClick={() => setShowConfigApiKeyModal(true)}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 text-xs font-semibold border border-slate-700 transition-all"
-              title="Configurar API Key de Gemini / IA"
-            >
-              <Key className="w-4 h-4" />
-            </button>
-
             {!game.modoCompetitivo && (
               <button
                 onClick={() => setShowDidacticModal(true)}
@@ -1904,19 +1869,11 @@ export default function GameDashboardPage() {
                     {game.estado === 'finalizada' ? '🏆 Gran Final y Proclamación de Ganadores' : 'Resumen Histórico de Decisiones'}
                   </h2>
                   <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-                    Revisá el camino estratégico de cada equipo a lo largo de las rondas y consultá la devolución del Director Financiero IA (Gemini) para descubrir dónde ganaron o perdieron dinero.
+                    Revisá el camino estratégico de cada equipo a lo largo de las rondas y consultá la devolución del Director Financiero IA para descubrir dónde ganaron o perdieron dinero.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setShowConfigApiKeyModal(true)}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 rounded-xl flex items-center gap-1.5 transition-colors"
-                  >
-                    <Key className="w-4 h-4 text-emerald-400" />
-                    <span>Configurar Gemini API</span>
-                  </button>
-
                   {game.estado !== 'finalizada' && (
                     <button
                       onClick={handleFinalizarPartida}
@@ -1965,7 +1922,7 @@ export default function GameDashboardPage() {
               </div>
             </div>
 
-            {/* SECCIÓN 1: AUDITORÍA Y FEEDBACK CON IA (GEMINI) */}
+            {/* SECCIÓN 1: AUDITORÍA Y FEEDBACK CON IA  */}
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -2021,7 +1978,7 @@ export default function GameDashboardPage() {
                     ) : (
                       <>
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>Generar con Gemini</span>
+                        <span>Generar devolución</span>
                       </>
                     )}
                   </button>
@@ -2069,7 +2026,7 @@ export default function GameDashboardPage() {
                       <div>Facturación: <strong className="text-white">${feedbackData.metricas_clave.facturacion_total.toLocaleString()}</strong></div>
                       <div>Eficiencia Operativa: <strong className="text-cyan-400">{feedbackData.metricas_clave.tasa_eficiencia_operativa_pct}%</strong></div>
                       <div className="text-[10px] text-slate-500 pt-1">
-                        Motor: {feedbackData.origen === 'gemini' ? 'Google Gemini 2.0 Flash' : 'Auditor Experto Heurístico'}
+                        Motor: {feedbackData.origen === 'heuristico' ? 'Auditor Experto Heurístico' : 'Inteligencia Artificial'}
                       </div>
                     </div>
                   </div>
@@ -2151,7 +2108,7 @@ export default function GameDashboardPage() {
                   <Brain className="w-10 h-10 mx-auto text-slate-600" />
                   <h4 className="font-bold text-sm text-slate-300">Sin Auditoría Generada Aún</h4>
                   <p className="text-xs max-w-md mx-auto text-slate-400">
-                    Hacé clic en "Generar con Gemini" para que la inteligencia artificial audite el historial contable completo de "{activeFeedbackTeam.nombre}" y te diga cómo mejorar.
+                    Hacé clic en "Generar devolución" para que la inteligencia artificial audite el historial contable completo de "{activeFeedbackTeam.nombre}" y te diga cómo mejorar.
                   </p>
                   <button
                     onClick={() => handleGenerarFeedback(selectedFeedbackTeamId)}
@@ -2434,84 +2391,6 @@ export default function GameDashboardPage() {
         )}
 
       </main>
-
-      {/* ========================================================================= */}
-      {/* MODAL: CONFIGURAR API KEY DE GEMINI / IA */}
-      {/* ========================================================================= */}
-      {showConfigApiKeyModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
-            <button
-              onClick={() => setShowConfigApiKeyModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 mb-2 text-emerald-400">
-              <Key className="w-5 h-5" />
-              <h3 className="font-bold text-base text-white">Configurar API Key de Inteligencia Artificial</h3>
-            </div>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              Ingresá tu clave de <strong>Google Gemini API</strong> (o OpenAI/OpenRouter) para que el Director Financiero IA analice a fondo las decisiones de tus alumnos y les brinde recomendaciones personalizadas.
-            </p>
-
-            <form onSubmit={handleGuardarConfigApiKey} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  API Key de Google Gemini (o sk-...)
-                </label>
-                <input
-                  type="password"
-                  value={apiKeyGemini}
-                  onChange={e => setApiKeyGemini(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
-                />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Se guarda de forma segura únicamente en el almacenamiento local de tu navegador. Si lo dejás vacío, el sistema usará el motor experto heurístico integrado.
-                </span>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Modelo de IA
-                </label>
-                <select
-                  value={modeloGemini}
-                  onChange={e => setModeloGemini(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="gemini-2.5-flash">Google Gemini 2.5 Flash (Recomendado • Versión Actual)</option>
-                  <option value="gemini-1.5-flash">Google Gemini 1.5 Flash (Ultrarrápido)</option>
-                  <option value="gemini-1.5-pro">Google Gemini 1.5 Pro</option>
-                  <option value="gpt-4o-mini">OpenAI GPT-4o-mini (si usas sk-...)</option>
-                </select>
-              </div>
-
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300 text-xs">
-                💡 <strong>¿No tenés API Key?</strong> Podés obtener una gratis en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline font-bold hover:text-white">Google AI Studio</a> en 1 minuto. O dejalo en blanco y el simulador usará su auditor contable inteligente automático.
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfigApiKeyModal(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/20"
-                >
-                  Guardar Configuración
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* MODAL: AGREGAR NUEVO EQUIPO DE ALUMNOS */}

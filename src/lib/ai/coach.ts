@@ -1,4 +1,4 @@
-import { DecisionesEquipo, ResultadoRondaMercado, ResultadoSimulacionEquipo } from '@/lib/engine/types';
+import { ResultadoSimulacionEquipo } from '@/lib/engine/types';
 
 export interface MetricasClaveAuditoria {
   utilidad_acumulada_final: number;
@@ -69,35 +69,35 @@ export interface CoachContextoEquipo {
   }>;
 }
 
+const TIMEOUT_IA_MS = 30_000;
+const CALIFICACIONES = ['A+', 'A', 'B', 'C', 'D', 'F'];
+
 export class BusinessCoachAI {
   /**
-   * Genera una auditoría y recomendaciones estratégicas completas para un equipo.
-   * Si se provee una apiKey (de Gemini o OpenAI), consulta la IA generativa.
-   * Si no, utiliza el motor experto heurístico financiero integrado.
+   * Genera una auditoría completa para un equipo. Las claves de IA solo se leen del servidor;
+   * si no hay ninguna configurada o el proveedor falla, responde el auditor heurístico.
    */
-  public static async generarFeedback(
-    contexto: CoachContextoEquipo,
-    options?: {
-      apiKey?: string;
-      provider?: 'gemini' | 'openai' | 'openrouter';
-      model?: string;
-    }
-  ): Promise<FeedbackEquipo> {
+  public static async generarFeedback(contexto: CoachContextoEquipo): Promise<FeedbackEquipo> {
     const metricas = this.calcularMetricas(contexto);
 
-    const apiKey = options?.apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
-    const provider = options?.provider || (options?.apiKey?.startsWith('AIza') || process.env.GEMINI_API_KEY ? 'gemini' : 'gemini');
-
-    if (apiKey) {
-      try {
-        if (provider === 'gemini' || apiKey.startsWith('AIza')) {
-          return await this.consultarGemini(contexto, metricas, apiKey, options?.model);
-        } else {
-          return await this.consultarOpenAICompatible(contexto, metricas, apiKey, options?.model);
-        }
-      } catch (err) {
-        console.warn('Fallo llamada a LLM, usando auditor experto heurístico:', err);
+    try {
+      if (process.env.GEMINI_API_KEY) {
+        return await this.consultarGemini(contexto, metricas, process.env.GEMINI_API_KEY);
       }
+      if (process.env.OPENROUTER_API_KEY) {
+        return await this.consultarOpenAICompatible(
+          contexto, metricas, process.env.OPENROUTER_API_KEY,
+          'https://openrouter.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'
+        );
+      }
+      if (process.env.OPENAI_API_KEY) {
+        return await this.consultarOpenAICompatible(
+          contexto, metricas, process.env.OPENAI_API_KEY,
+          'https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'
+        );
+      }
+    } catch (err) {
+      console.warn('Falló la llamada al proveedor de IA, se usa el auditor heurístico:', err);
     }
 
     return this.generarFeedbackHeuristico(contexto, metricas);
@@ -261,136 +261,81 @@ export class BusinessCoachAI {
     };
   }
 
-  /**
-   * Consulta a la API de Google Gemini (v1beta o v1)
-   */
-  public static async consultarGemini(
+  private static armarRespuesta(
     contexto: CoachContextoEquipo,
     metricas: MetricasClaveAuditoria,
-    apiKey: string,
-    modelName: string = 'gemini-2.5-flash'
-  ): Promise<FeedbackEquipo> {
-    // Si viene gemini-2.0-flash (descontinuado por Google), migrar a gemini-2.5-flash
-    let targetModel = modelName;
-    if (targetModel === 'gemini-2.0-flash') {
-      targetModel = 'gemini-2.5-flash';
-    }
+    textoJson: string,
+    origen: FeedbackEquipo['origen']
+  ): FeedbackEquipo {
+    const parseado = JSON.parse(textoJson);
+    const lista = (valor: unknown) => (Array.isArray(valor) ? valor.filter((v): v is string => typeof v === 'string') : []);
+    const texto = (valor: unknown, porDefecto: string) => (typeof valor === 'string' && valor ? valor : porDefecto);
 
-    const candidateModels = [targetModel, 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
-      .filter((v, i, a) => a.indexOf(v) === i);
-
-    let lastError: any = null;
-
-    for (const modelToTry of candidateModels) {
-      try {
-        const prompt = this.construirPrompt(contexto, metricas);
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelToTry}:generateContent?key=${apiKey}`;
-
-        const body = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.4
-          }
-        };
-
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Gemini API Error (${res.status}) [${modelToTry}]: ${errText}`);
-        }
-
-        const data = await res.json();
-        const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!candidateText) {
-          throw new Error(`Respuesta vacía de Gemini API con ${modelToTry}`);
-        }
-
-        const jsonParsed = JSON.parse(candidateText);
-
-        return {
-          equipo_id: contexto.equipo.id,
-          nombre_equipo: contexto.equipo.nombre,
-          calificacion_gestion: jsonParsed.calificacion_gestion || 'B',
-          titulo_diagnostico: jsonParsed.titulo_diagnostico || 'Diagnóstico Estratégico Gemini',
-          resumen_ejecutivo: jsonParsed.resumen_ejecutivo || '',
-          puntos_fuertes: Array.isArray(jsonParsed.puntos_fuertes) ? jsonParsed.puntos_fuertes : [],
-          errores_criticos: Array.isArray(jsonParsed.errores_criticos) ? jsonParsed.errores_criticos : [],
-          oportunidades_perdidas: Array.isArray(jsonParsed.oportunidades_perdidas) ? jsonParsed.oportunidades_perdidas : [],
-          recomendaciones_estrategicas: Array.isArray(jsonParsed.recomendaciones_estrategicas) ? jsonParsed.recomendaciones_estrategicas : [],
-          metricas_clave: metricas,
-          origen: 'gemini'
-        };
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Intento con ${modelToTry} falló:`, err.message);
-      }
-    }
-
-    throw lastError || new Error('No se pudo conectar con ningún modelo de Gemini');
+    return {
+      equipo_id: contexto.equipo.id,
+      nombre_equipo: contexto.equipo.nombre,
+      calificacion_gestion: CALIFICACIONES.includes(parseado.calificacion_gestion) ? parseado.calificacion_gestion : 'B',
+      titulo_diagnostico: texto(parseado.titulo_diagnostico, 'Diagnóstico estratégico'),
+      resumen_ejecutivo: texto(parseado.resumen_ejecutivo, ''),
+      puntos_fuertes: lista(parseado.puntos_fuertes),
+      errores_criticos: lista(parseado.errores_criticos),
+      oportunidades_perdidas: lista(parseado.oportunidades_perdidas),
+      recomendaciones_estrategicas: lista(parseado.recomendaciones_estrategicas),
+      metricas_clave: metricas,
+      origen
+    };
   }
 
-  /**
-   * Consulta a API compatible con OpenAI / OpenRouter
-   */
-  public static async consultarOpenAICompatible(
+  private static async consultarGemini(
+    contexto: CoachContextoEquipo,
+    metricas: MetricasClaveAuditoria,
+    apiKey: string
+  ): Promise<FeedbackEquipo> {
+    const configurado = process.env.AI_MODEL;
+    const modelo = configurado?.startsWith('gemini') ? configurado : 'gemini-2.5-flash';
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      signal: AbortSignal.timeout(TIMEOUT_IA_MS),
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: this.construirPrompt(contexto, metricas) }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
+      })
+    });
+    if (!res.ok) throw new Error(`Gemini respondió ${res.status}: ${await res.text()}`);
+
+    const data = await res.json();
+    const contenido = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!contenido) throw new Error('Gemini devolvió una respuesta vacía');
+    return this.armarRespuesta(contexto, metricas, contenido, 'gemini');
+  }
+
+  private static async consultarOpenAICompatible(
     contexto: CoachContextoEquipo,
     metricas: MetricasClaveAuditoria,
     apiKey: string,
-    modelName: string = 'gpt-4o-mini'
+    endpoint: string,
+    modeloPorDefecto: string
   ): Promise<FeedbackEquipo> {
-    const prompt = this.construirPrompt(contexto, metricas);
-    const isOpenRouter = apiKey.startsWith('sk-or-');
-    const endpoint = isOpenRouter ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(TIMEOUT_IA_MS),
       body: JSON.stringify({
-        model: modelName,
+        model: process.env.AI_MODEL || modeloPorDefecto,
         messages: [
           { role: 'system', content: 'Sos un mentor financiero de simulador empresarial. Respondé estrictamente en formato JSON válido.' },
-          { role: 'user', content: prompt }
+          { role: 'user', content: this.construirPrompt(contexto, metricas) }
         ],
         response_format: { type: 'json_object' },
         temperature: 0.4
       })
     });
-
-    if (!res.ok) {
-      throw new Error(`OpenAI API error: ${await res.text()}`);
-    }
+    if (!res.ok) throw new Error(`El proveedor de IA respondió ${res.status}: ${await res.text()}`);
 
     const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    const jsonParsed = JSON.parse(content);
-
-    return {
-      equipo_id: contexto.equipo.id,
-      nombre_equipo: contexto.equipo.nombre,
-      calificacion_gestion: jsonParsed.calificacion_gestion || 'B',
-      titulo_diagnostico: jsonParsed.titulo_diagnostico || 'Diagnóstico Estratégico IA',
-      resumen_ejecutivo: jsonParsed.resumen_ejecutivo || '',
-      puntos_fuertes: Array.isArray(jsonParsed.puntos_fuertes) ? jsonParsed.puntos_fuertes : [],
-      errores_criticos: Array.isArray(jsonParsed.errores_criticos) ? jsonParsed.errores_criticos : [],
-      oportunidades_perdidas: Array.isArray(jsonParsed.oportunidades_perdidas) ? jsonParsed.oportunidades_perdidas : [],
-      recomendaciones_estrategicas: Array.isArray(jsonParsed.recomendaciones_estrategicas) ? jsonParsed.recomendaciones_estrategicas : [],
-      metricas_clave: metricas,
-      origen: 'openai'
-    };
+    return this.armarRespuesta(contexto, metricas, data.choices?.[0]?.message?.content, 'openai');
   }
 
   private static construirPrompt(contexto: CoachContextoEquipo, metricas: MetricasClaveAuditoria): string {

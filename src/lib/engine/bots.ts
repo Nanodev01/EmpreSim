@@ -165,7 +165,8 @@ export class LLMBotAgent {
    */
   public static async tomarDecision(ctx: BotContexto): Promise<BotDecisionOutput> {
     const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
-    const model = process.env.AI_MODEL || 'openai/gpt-4o-mini';
+    const usaOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+    const model = process.env.AI_MODEL || (usaOpenRouter ? 'openai/gpt-4o-mini' : 'gpt-4o-mini');
 
     if (!apiKey) {
       // Fallback transparente a heurístico
@@ -200,7 +201,7 @@ Genera las 10 decisiones estrictamente válidas:
 Responde ÚNICAMENTE en JSON plano con la estructura:
 {"precio": number, "marketing": number, "inv_des": number, "capacitacion": number, "nivel_prod": number, "ampl_planta": number, "ped_prest_a": number, "dev_prest_a": number, "ped_prest_b": number, "dev_prest_b": number, "razonamiento": string}`;
 
-      const baseUrl = process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+      const baseUrl = usaOpenRouter ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
       
       const res = await fetch(baseUrl, {
         method: 'POST',
@@ -208,6 +209,7 @@ Responde ÚNICAMENTE en JSON plano con la estructura:
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
+        signal: AbortSignal.timeout(20_000),
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: prompt }],
