@@ -2,118 +2,79 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getCasoPorId } from '@/lib/engine/cases';
 import { PersonalidadBot } from '@/lib/engine/bots';
+import { HORA, MINUTO, leerJson, ruta } from '@/lib/api/http';
+import { hashClaveActual, obtenerOCrearHashClave } from '@/lib/api/clave-navegador';
+import { esquemaNuevaPartida } from '@/lib/api/esquemas';
+import { partidaVisible } from '@/lib/api/partida-visible';
 
-export async function GET() {
-  try {
-    const games = await prisma.game.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: 10,
-      include: {
-        teams: true,
-        rounds: {
-          orderBy: { periodo: 'desc' },
-          take: 1
-        }
-      }
-    });
-    return NextResponse.json(games);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+const NOMBRES_BOTS: Record<PersonalidadBot, string> = {
+  agresivo: 'Dumping Corp (IA)',
+  premium: 'Luxe Innovations (IA)',
+  conservador: 'Solidez Financiera (IA)',
+  equilibrado: 'Equilibrio S.A. (IA)'
+};
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { nombre, modo, casoId, nombreEmpresa, personalidadesBots, equiposAlumnos, modoCompetitivo } = body;
+export const GET = ruta<object>({ bucket: 'lectura', max: 300, ventanaMs: MINUTO }, async () => {
+  const claveHash = await hashClaveActual();
+  if (!claveHash) return NextResponse.json([]);
 
-    const caso = getCasoPorId(casoId || 'clasico-alta');
-    const configCasoJson = JSON.stringify(caso);
-
-    // Determinar los equipos humanos
-    let humanTeamsToCreate: Array<{ nombre: string }> = [];
-
-    if (Array.isArray(equiposAlumnos) && equiposAlumnos.length > 0) {
-      humanTeamsToCreate = equiposAlumnos.map((eq: any) => ({
-        nombre: typeof eq === 'string' ? eq.trim() : (eq.nombre ? eq.nombre.trim() : 'Equipo')
-      })).filter(eq => eq.nombre.length > 0);
-    } else if (modo === 'certamen') {
-      humanTeamsToCreate = [
-        { nombre: 'Equipo Alfa' },
-        { nombre: 'Equipo Beta' },
-        { nombre: 'Equipo Gamma' }
-      ];
-    } else {
-      humanTeamsToCreate = [
-        { nombre: nombreEmpresa?.trim() || 'Mi Empresa S.A.' }
-      ];
+  const partidas = await prisma.game.findMany({
+    where: { claveHash },
+    orderBy: { updatedAt: 'desc' },
+    take: 50,
+    select: {
+      id: true,
+      nombre: true,
+      modo: true,
+      estado: true,
+      periodoActual: true,
+      modoCompetitivo: true,
+      updatedAt: true,
+      teams: { select: { id: true } }
     }
+  });
+  return NextResponse.json(partidas);
+});
 
-    // Determinar los bots
-    const botsToCreate = (Array.isArray(personalidadesBots) ? personalidadesBots : (modo === 'vs-ai' ? ['agresivo', 'premium', 'conservador'] : [])).map((perso: PersonalidadBot, i: number) => {
-      const nombresDefault: Record<PersonalidadBot, string> = {
-        agresivo: 'Dumping Corp (IA)',
-        premium: 'Luxe Innovations (IA)',
-        conservador: 'Solidez Financiera (IA)',
-        equilibrado: 'Equilibrio S.A. (IA)'
-      };
-      return {
-        nombre: nombresDefault[perso] || `Bot IA ${i + 1}`,
-        esHumano: false,
-        personalidad: perso,
-        planta: 50000,
-        capital: 70000,
-        efectivo: 0,
-        stockUnidades: 0,
-        stockValorizado: 0,
-        capacitacionAcum: 0,
-        idAcumulado: 0,
-        empleados: 0,
-        prestamosBcoA: 0,
-        prestamosBcoB: 0,
-        utilidadAcumulada: 0
-      };
-    });
+export const POST = ruta<object>({ bucket: 'crear', max: 30, ventanaMs: HORA }, async (req) => {
+  const datos = esquemaNuevaPartida.parse(await leerJson(req));
+  const caso = getCasoPorId(datos.casoId ?? 'clasico-alta');
 
-    const teamsData = [
-      ...humanTeamsToCreate.map(h => ({
-        nombre: h.nombre,
-        esHumano: true,
-        planta: 50000,
-        capital: 70000,
-        efectivo: 0,
-        stockUnidades: 0,
-        stockValorizado: 0,
-        capacitacionAcum: 0,
-        idAcumulado: 0,
-        empleados: 0,
-        prestamosBcoA: 0,
-        prestamosBcoB: 0,
-        utilidadAcumulada: 0
-      })),
-      ...botsToCreate
-    ];
-
-    const game = await prisma.game.create({
-      data: {
-        nombre: nombre || `Partida ${new Date().toLocaleDateString('es-AR')}`,
-        modo: modo || 'vs-ai',
-        casoId: caso.id,
-        periodoActual: 0,
-        estado: 'en_curso',
-        configCasoJson,
-        modoCompetitivo: Boolean(modoCompetitivo),
-        teams: {
-          create: teamsData
-        }
-      },
-      include: {
-        teams: true
-      }
-    });
-
-    return NextResponse.json(game);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const alumnos = (datos.equiposAlumnos ?? []).filter(nombre => nombre.length > 0);
+  let nombresHumanos: string[];
+  if (alumnos.length > 0) {
+    nombresHumanos = alumnos;
+  } else if (datos.modo === 'certamen') {
+    nombresHumanos = ['Equipo Alfa', 'Equipo Beta', 'Equipo Gamma'];
+  } else {
+    nombresHumanos = [datos.nombreEmpresa || 'Mi Empresa S.A.'];
   }
-}
+
+  const personalidades: PersonalidadBot[] = datos.personalidadesBots
+    ?? (datos.modo === 'vs-ai' ? ['agresivo', 'premium', 'conservador'] : []);
+
+  const partida = await prisma.game.create({
+    data: {
+      nombre: datos.nombre || `Partida ${new Date().toLocaleDateString('es-AR')}`,
+      modo: datos.modo,
+      casoId: caso.id,
+      estado: 'en_curso',
+      configCasoJson: JSON.stringify(caso),
+      modoCompetitivo: Boolean(datos.modoCompetitivo),
+      claveHash: await obtenerOCrearHashClave(req),
+      teams: {
+        create: [
+          ...nombresHumanos.map(nombre => ({ nombre, esHumano: true })),
+          ...personalidades.map(personalidad => ({
+            nombre: NOMBRES_BOTS[personalidad],
+            esHumano: false,
+            personalidad
+          }))
+        ]
+      }
+    },
+    include: { teams: { include: { decisions: true } }, rounds: true }
+  });
+
+  return NextResponse.json(partidaVisible(partida));
+});

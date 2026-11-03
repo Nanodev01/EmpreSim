@@ -1,79 +1,45 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { CasoPeriodoConfig } from '@/lib/engine/cases';
+import { ApiError, MINUTO, leerJson, noEncontrada, ruta } from '@/lib/api/http';
+import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { PLANTA_MAXIMA, esquemaCaso, esquemaDecision } from '@/lib/api/esquemas';
+import { ORDEN_EQUIPOS, equipoEnTurno } from '@/lib/api/partida-visible';
 
-export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const body = await req.json();
-    const {
-      teamId,
-      periodo,
-      precio,
-      marketing,
-      invDes,
-      capacitacion,
-      nivelProd,
-      amplPlanta,
-      pedPrestA,
-      devPrestA,
-      pedPrestB,
-      devPrestB,
-      razonamiento
-    } = body;
+export const POST = ruta<{ id: string }>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (req, { id }) => {
+  const { teamId, periodo, ...valores } = esquemaDecision.parse(await leerJson(req));
 
-    // Validaciones estrictas
-    if (precio < 50 || precio > 100) {
-      return NextResponse.json({ error: 'El precio debe estar entre 50 y 100' }, { status: 400 });
-    }
-    if (marketing < 0 || marketing > 10000) {
-      return NextResponse.json({ error: 'El marketing debe estar entre 0 y 10000' }, { status: 400 });
-    }
-    if (capacitacion % 2000 !== 0 || capacitacion < 0 || capacitacion > 20000) {
-      return NextResponse.json({ error: 'La capacitación debe ser múltiplo de 2000 entre 0 y 20000' }, { status: 400 });
-    }
-    if (![0, 25, 50, 75, 100].includes(nivelProd)) {
-      return NextResponse.json({ error: 'El nivel de producción debe ser 0, 25, 50, 75 o 100' }, { status: 400 });
-    }
+  const partida = await prisma.game.findFirst({
+    where: await filtroPartidaPropia(id),
+    include: { teams: { orderBy: ORDEN_EQUIPOS, include: { decisions: true } } }
+  });
+  if (!partida) throw noEncontrada();
+  if (partida.estado !== 'en_curso') throw new ApiError(409, 'La partida ya finalizó');
+  if (periodo !== partida.periodoActual) throw new ApiError(409, 'El período ya no está disponible. Recargá la página.');
 
-    const decision = await prisma.roundDecision.upsert({
-      where: {
-        teamId_periodo: {
-          teamId,
-          periodo
-        }
-      },
-      update: {
-        precio,
-        marketing,
-        invDes,
-        capacitacion,
-        nivelProd,
-        amplPlanta,
-        pedPrestA,
-        devPrestA,
-        pedPrestB,
-        devPrestB,
-        razonamiento
-      },
-      create: {
-        teamId,
-        periodo,
-        precio,
-        marketing,
-        invDes,
-        capacitacion,
-        nivelProd,
-        amplPlanta,
-        pedPrestA,
-        devPrestA,
-        pedPrestB,
-        devPrestB,
-        razonamiento
-      }
-    });
-
-    return NextResponse.json(decision);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const equipo = partida.teams.find(t => t.id === teamId);
+  if (!equipo || !equipo.esHumano) throw new ApiError(404, 'Equipo no encontrado');
+  if (equipoEnTurno(partida.teams, periodo)?.id !== teamId) {
+    throw new ApiError(409, 'No es el turno de este equipo o ya guardó sus decisiones');
   }
-}
+
+  const caso = esquemaCaso.parse(JSON.parse(partida.configCasoJson));
+  const bancos = (caso.periodos[periodo] as unknown as CasoPeriodoConfig).config_bancos;
+
+  if (equipo.planta + valores.amplPlanta > PLANTA_MAXIMA) {
+    throw new ApiError(400, `La planta no puede superar $${PLANTA_MAXIMA}`);
+  }
+  if (valores.devPrestA > equipo.prestamosBcoA) throw new ApiError(400, 'No podés devolver más de lo que debés al Banco A');
+  if (valores.devPrestB > equipo.prestamosBcoB) throw new ApiError(400, 'No podés devolver más de lo que debés al Banco B');
+  if (equipo.prestamosBcoA + valores.pedPrestA - valores.devPrestA > bancos.max_cred_a) {
+    throw new ApiError(400, `El préstamo supera el cupo del Banco A ($${bancos.max_cred_a})`);
+  }
+  if (equipo.prestamosBcoB + valores.pedPrestB - valores.devPrestB > bancos.max_cred_b) {
+    throw new ApiError(400, `El préstamo supera el cupo del Banco B ($${bancos.max_cred_b})`);
+  }
+
+  await prisma.roundDecision.create({ data: { teamId, periodo, ...valores } });
+
+  // No se devuelven los valores: la pantalla pasa enseguida al equipo siguiente.
+  return NextResponse.json({ success: true }, { status: 201 });
+});

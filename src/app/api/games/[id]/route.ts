@@ -1,77 +1,66 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { ApiError, MINUTO, leerJson, noEncontrada, ruta } from '@/lib/api/http';
+import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { esquemaActualizarPartida, esquemaCaso } from '@/lib/api/esquemas';
+import { ORDEN_EQUIPOS, partidaVisible } from '@/lib/api/partida-visible';
 
-export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const game = await prisma.game.findUnique({
-      where: { id: params.id },
-      include: {
-        teams: {
-          include: {
-            decisions: {
-              orderBy: { periodo: 'desc' }
-            }
-          }
-        },
-        rounds: {
-          orderBy: { periodo: 'desc' }
-        }
-      }
-    });
+type Params = { id: string };
 
-    if (!game) {
-      return NextResponse.json({ error: 'Partida no encontrada' }, { status: 404 });
+export const GET = ruta<Params>({ bucket: 'lectura', max: 300, ventanaMs: MINUTO }, async (_req, { id }) => {
+  const partida = await prisma.game.findFirst({
+    where: await filtroPartidaPropia(id),
+    include: {
+      teams: { orderBy: ORDEN_EQUIPOS, include: { decisions: { orderBy: { periodo: 'desc' } } } },
+      rounds: { orderBy: { periodo: 'desc' } }
     }
+  });
+  if (!partida) throw noEncontrada();
+  return NextResponse.json(partidaVisible(partida));
+});
 
-    return NextResponse.json(game);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+export const PUT = ruta<Params>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (req, { id }) => {
+  const datos = esquemaActualizarPartida.parse(await leerJson(req));
+  const partida = await prisma.game.findFirst({
+    where: await filtroPartidaPropia(id),
+    include: { teams: { select: { decisions: { select: { id: true }, take: 1 } } } }
+  });
+  if (!partida) throw noEncontrada();
+  if (partida.estado === 'finalizada') {
+    throw new ApiError(409, 'La partida ya finalizó y no se puede modificar');
   }
-}
 
-export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const body = await req.json();
-    const { configCasoJson, modoCompetitivo } = body;
+  const cambios: { configCasoJson?: string; modoCompetitivo?: boolean } = {};
 
-    const dataToUpdate: any = {};
-    if (configCasoJson !== undefined) {
-      dataToUpdate.configCasoJson = typeof configCasoJson === 'string' ? configCasoJson : JSON.stringify(configCasoJson);
+  if (datos.modoCompetitivo !== undefined && datos.modoCompetitivo !== partida.modoCompetitivo) {
+    // Pasar de competitivo a práctica a mitad de partida revelaría los resultados ocultos.
+    const empezada = partida.periodoActual > 0 || partida.teams.some(t => t.decisions.length > 0);
+    if (empezada) {
+      throw new ApiError(409, 'El modo solo se puede cambiar antes de que algún equipo cargue sus decisiones');
     }
-    if (modoCompetitivo !== undefined) {
-      dataToUpdate.modoCompetitivo = Boolean(modoCompetitivo);
-    }
-
-    const game = await prisma.game.update({
-      where: { id: params.id },
-      data: dataToUpdate
-    });
-
-    return NextResponse.json(game);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    cambios.modoCompetitivo = datos.modoCompetitivo;
   }
-}
 
-export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const game = await prisma.game.findUnique({
-      where: { id: params.id }
-    });
-
-    if (!game) {
-      return NextResponse.json({ error: 'Partida no encontrada' }, { status: 404 });
+  if (datos.configCasoJson !== undefined) {
+    let crudo: unknown;
+    try {
+      crudo = JSON.parse(datos.configCasoJson);
+    } catch {
+      throw new ApiError(400, 'La configuración del caso no es JSON válido');
     }
-
-    await prisma.game.delete({
-      where: { id: params.id }
-    });
-
-    return NextResponse.json({ success: true, message: 'Partida eliminada correctamente' });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const nuevo = esquemaCaso.parse(crudo);
+    // Las rondas ya simuladas no se reescriben: solo cambian la actual y las siguientes.
+    const actual = esquemaCaso.parse(JSON.parse(partida.configCasoJson));
+    nuevo.periodos = nuevo.periodos.map((periodo, i) => (i < partida.periodoActual ? actual.periodos[i] : periodo));
+    cambios.configCasoJson = JSON.stringify(nuevo);
   }
-}
+
+  await prisma.game.update({ where: { id }, data: cambios });
+  return NextResponse.json({ success: true });
+});
+
+export const DELETE = ruta<Params>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (_req, { id }) => {
+  const { count } = await prisma.game.deleteMany({ where: await filtroPartidaPropia(id) });
+  if (count === 0) throw noEncontrada();
+  return NextResponse.json({ success: true });
+});

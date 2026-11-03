@@ -1,48 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { MINUTO, noEncontrada, ruta } from '@/lib/api/http';
+import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
 
-export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const game = await prisma.game.findUnique({
-      where: { id: params.id },
-      include: {
-        teams: {
-          include: {
-            decisions: true
-          }
-        },
-        rounds: {
-          orderBy: { periodo: 'asc' }
-        }
-      }
-    });
-
-    if (!game) {
-      return NextResponse.json({ error: 'Partida no encontrada' }, { status: 404 });
-    }
-
-    const updated = await prisma.game.update({
-      where: { id: params.id },
-      data: {
-        estado: 'finalizada'
-      },
-      include: {
-        teams: {
-          include: {
-            decisions: {
-              orderBy: { periodo: 'asc' }
-            }
-          }
-        },
-        rounds: {
-          orderBy: { periodo: 'asc' }
-        }
-      }
-    });
-
-    return NextResponse.json(updated);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+export const POST = ruta<{ id: string }>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (_req, { id }) => {
+  const { count } = await prisma.game.updateMany({
+    where: await filtroPartidaPropia(id),
+    data: { estado: 'finalizada' }
+  });
+  if (count === 0) throw noEncontrada();
+  return NextResponse.json({ success: true });
+});

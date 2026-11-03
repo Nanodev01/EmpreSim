@@ -2,134 +2,82 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { BusinessCoachAI, CoachContextoEquipo } from '@/lib/ai/coach';
 import { ResultadoRondaMercado } from '@/lib/engine/types';
+import { ApiError, HORA, leerJson, noEncontrada, ruta } from '@/lib/api/http';
+import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { esquemaCoach } from '@/lib/api/esquemas';
+import { ORDEN_EQUIPOS } from '@/lib/api/partida-visible';
 
-export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const body = await req.json().catch(() => ({}));
-    const { teamId, apiKey, provider, model } = body;
+export const POST = ruta<{ id: string }>({ bucket: 'coach', max: 20, ventanaMs: HORA }, async (req, { id }) => {
+  const { teamId } = esquemaCoach.parse(await leerJson(req));
 
-    const game = await prisma.game.findUnique({
-      where: { id: params.id },
-      include: {
-        teams: {
-          include: {
-            decisions: {
-              orderBy: { periodo: 'asc' }
-            }
-          }
-        },
-        rounds: {
-          orderBy: { periodo: 'asc' }
-        }
-      }
-    });
-
-    if (!game) {
-      return NextResponse.json({ error: 'Partida no encontrada' }, { status: 404 });
+  const partida = await prisma.game.findFirst({
+    where: await filtroPartidaPropia(id),
+    include: {
+      teams: { orderBy: ORDEN_EQUIPOS, include: { decisions: { orderBy: { periodo: 'asc' } } } },
+      rounds: { orderBy: { periodo: 'asc' } }
     }
-
-    // Identificar el equipo objetivo
-    const targetTeam = teamId 
-      ? game.teams.find(t => t.id === teamId)
-      : (game.teams.find(t => t.esHumano) || game.teams[0]);
-
-    if (!targetTeam) {
-      return NextResponse.json({ error: 'Equipo no encontrado' }, { status: 404 });
-    }
-
-    // Extraer competidores
-    const competidores = game.teams
-      .filter(t => t.id !== targetTeam.id)
-      .map(t => ({
-        id: t.id,
-        nombre: t.nombre,
-        utilidadAcumulada: t.utilidadAcumulada,
-        esHumano: t.esHumano
-      }));
-
-    // Extraer decisiones del equipo ordenadas por período
-    const decisionesPorPeriodo = targetTeam.decisions.map(d => ({
-      periodo: d.periodo,
-      precio: d.precio,
-      marketing: d.marketing,
-      invDes: d.invDes,
-      capacitacion: d.capacitacion,
-      nivelProd: d.nivelProd,
-      amplPlanta: d.amplPlanta,
-      pedPrestA: d.pedPrestA,
-      devPrestA: d.devPrestA,
-      pedPrestB: d.pedPrestB,
-      devPrestB: d.devPrestB
-    }));
-
-    // Extraer resultados ronda a ronda
-    const resultadosPorPeriodo = game.rounds.map(round => {
-      let resultadoEquipo = undefined;
-      let precioPromedioMercado = 89;
-      let posicionRanking = 1;
-      let totalEquipos = game.teams.length;
-
-      try {
-        const snap: ResultadoRondaMercado = JSON.parse(round.resultadoJson);
-        resultadoEquipo = snap.resultados_equipos[targetTeam.id];
-        precioPromedioMercado = snap.precio_promedio || 89;
-
-        const rankItem = snap.ranking.find(r => r.equipo_id === targetTeam.id);
-        if (rankItem) {
-          posicionRanking = rankItem.posicion;
-        }
-        totalEquipos = snap.ranking.length;
-      } catch (err) {
-        console.error('Error parseando round report:', err);
-      }
-
-      return {
-        periodo: round.periodo,
-        resultadoEquipo,
-        precioPromedioMercado,
-        posicionRanking,
-        totalEquipos
-      };
-    });
-
-    const contexto: CoachContextoEquipo = {
-      equipo: {
-        id: targetTeam.id,
-        nombre: targetTeam.nombre,
-        esHumano: targetTeam.esHumano,
-        utilidadAcumulada: targetTeam.utilidadAcumulada,
-        efectivo: targetTeam.efectivo,
-        planta: targetTeam.planta,
-        stockUnidades: targetTeam.stockUnidades,
-        capacitacionAcum: targetTeam.capacitacionAcum,
-        idAcumulado: targetTeam.idAcumulado,
-        prestamosBcoA: targetTeam.prestamosBcoA,
-        prestamosBcoB: targetTeam.prestamosBcoB
-      },
-      competidores,
-      decisionesPorPeriodo,
-      resultadosPorPeriodo
-    };
-
-    // Generar la auditoría con Gemini o fallback heurístico
-    const feedback = await BusinessCoachAI.generarFeedback(contexto, {
-      apiKey,
-      provider,
-      model
-    });
-
-    // Persistir el feedback generado en la base de datos
-    await prisma.team.update({
-      where: { id: targetTeam.id },
-      data: {
-        feedbackJson: JSON.stringify(feedback)
-      }
-    });
-
-    return NextResponse.json(feedback);
-  } catch (error: any) {
-    console.error('Error en ruta coach:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  });
+  if (!partida) throw noEncontrada();
+  if (partida.modoCompetitivo && partida.estado !== 'finalizada') {
+    throw new ApiError(409, 'En modo competitivo la devolución está disponible al finalizar la partida');
   }
-}
+
+  const equipo = teamId
+    ? partida.teams.find(t => t.id === teamId)
+    : partida.teams.find(t => t.esHumano) ?? partida.teams[0];
+  if (!equipo) throw new ApiError(404, 'Equipo no encontrado');
+
+  const contexto: CoachContextoEquipo = {
+    equipo: {
+      id: equipo.id,
+      nombre: equipo.nombre,
+      esHumano: equipo.esHumano,
+      utilidadAcumulada: equipo.utilidadAcumulada,
+      efectivo: equipo.efectivo,
+      planta: equipo.planta,
+      stockUnidades: equipo.stockUnidades,
+      capacitacionAcum: equipo.capacitacionAcum,
+      idAcumulado: equipo.idAcumulado,
+      prestamosBcoA: equipo.prestamosBcoA,
+      prestamosBcoB: equipo.prestamosBcoB
+    },
+    competidores: partida.teams
+      .filter(t => t.id !== equipo.id)
+      .map(t => ({ id: t.id, nombre: t.nombre, utilidadAcumulada: t.utilidadAcumulada, esHumano: t.esHumano })),
+    // La ronda en curso queda afuera: la devolución no debe revelar valores todavía sin simular.
+    decisionesPorPeriodo: equipo.decisions
+      .filter(d => d.periodo < partida.periodoActual)
+      .map(d => ({
+        periodo: d.periodo,
+        precio: d.precio,
+        marketing: d.marketing,
+        invDes: d.invDes,
+        capacitacion: d.capacitacion,
+        nivelProd: d.nivelProd,
+        amplPlanta: d.amplPlanta,
+        pedPrestA: d.pedPrestA,
+        devPrestA: d.devPrestA,
+        pedPrestB: d.pedPrestB,
+        devPrestB: d.devPrestB
+      })),
+    resultadosPorPeriodo: partida.rounds.map(ronda => {
+      const snapshot: ResultadoRondaMercado = JSON.parse(ronda.resultadoJson);
+      return {
+        periodo: ronda.periodo,
+        resultadoEquipo: snapshot.resultados_equipos[equipo.id],
+        precioPromedioMercado: snapshot.precio_promedio || 89,
+        posicionRanking: snapshot.ranking.find(r => r.equipo_id === equipo.id)?.posicion ?? 1,
+        totalEquipos: snapshot.ranking.length
+      };
+    })
+  };
+
+  const devolucion = await BusinessCoachAI.generarFeedback(contexto);
+
+  await prisma.team.update({
+    where: { id: equipo.id },
+    data: { feedbackJson: JSON.stringify(devolucion) }
+  });
+
+  return NextResponse.json(devolucion);
+});

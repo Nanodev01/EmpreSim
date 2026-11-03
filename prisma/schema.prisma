@@ -15,12 +15,15 @@ model Game {
   periodoActual Int      @default(0) // 0 (prueba) hasta 6
   estado        String   @default("creada") // "creada" | "en_curso" | "finalizada"
   configCasoJson String  // JSON de la configuración de caso personalizada o editable
-  modoCompetitivo Boolean @default(false) // Si true, desactiva calculadora preventiva y pistas
+  modoCompetitivo Boolean @default(false) // Si true, desactiva ayudas y oculta resultados hasta el final
+  claveHash     String   // Hash de la clave anónima del navegador que creó la partida
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   teams         Team[]
   rounds        RoundReport[]
+
+  @@index([claveHash, updatedAt])
 }
 
 model Team {
@@ -49,6 +52,8 @@ model Team {
 
   game          Game            @relation(fields: [gameId], references: [id], onDelete: Cascade)
   decisions     RoundDecision[]
+
+  @@index([gameId])
 }
 
 model RoundDecision {

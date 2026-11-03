@@ -1,46 +1,26 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { ApiError, MINUTO, leerJson, noEncontrada, ruta } from '@/lib/api/http';
+import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { MAX_EQUIPOS, esquemaNuevoEquipo } from '@/lib/api/esquemas';
 
-export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const body = await req.json();
-    const { nombre, esHumano = true, personalidad } = body;
+export const POST = ruta<{ id: string }>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (req, { id }) => {
+  const { nombre } = esquemaNuevoEquipo.parse(await leerJson(req));
 
-    if (!nombre || !nombre.trim()) {
-      return NextResponse.json({ error: 'El nombre del equipo es obligatorio' }, { status: 400 });
-    }
-
-    const game = await prisma.game.findUnique({
-      where: { id: params.id }
-    });
-
-    if (!game) {
-      return NextResponse.json({ error: 'Partida no encontrada' }, { status: 404 });
-    }
-
-    const team = await prisma.team.create({
-      data: {
-        gameId: game.id,
-        nombre: nombre.trim(),
-        esHumano: Boolean(esHumano),
-        personalidad: personalidad || null,
-        planta: 50000,
-        capital: 70000,
-        efectivo: 0,
-        stockUnidades: 0,
-        stockValorizado: 0,
-        capacitacionAcum: 0,
-        idAcumulado: 0,
-        empleados: 0,
-        prestamosBcoA: 0,
-        prestamosBcoB: 0,
-        utilidadAcumulada: 0
-      }
-    });
-
-    return NextResponse.json(team, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const partida = await prisma.game.findFirst({
+    where: await filtroPartidaPropia(id),
+    include: { _count: { select: { teams: true } } }
+  });
+  if (!partida) throw noEncontrada();
+  if (partida.estado !== 'en_curso') throw new ApiError(409, 'La partida ya finalizó');
+  if (partida.periodoActual > 0) {
+    throw new ApiError(409, 'Los equipos solo se pueden sumar antes de simular la primera ronda');
   }
-}
+  if (partida._count.teams >= MAX_EQUIPOS) throw new ApiError(400, `El máximo es ${MAX_EQUIPOS} equipos`);
+
+  const equipo = await prisma.team.create({
+    data: { gameId: partida.id, nombre, esHumano: true },
+    select: { id: true, nombre: true }
+  });
+  return NextResponse.json(equipo, { status: 201 });
+});

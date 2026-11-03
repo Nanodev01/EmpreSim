@@ -1,227 +1,179 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { SimuladorEmpresarial } from '@/lib/engine/simulator';
-import { BotHeuristico, LLMBotAgent, PersonalidadBot } from '@/lib/engine/bots';
-import { CasoSimulacion, CasoPeriodoConfig } from '@/lib/engine/cases';
-import { DecisionesEquipo, EstadoAnteriorEquipo, NivelProduccion, ConfiguracionBancoYEntorno } from '@/lib/engine/types';
+import { BotDecisionOutput, LLMBotAgent, PersonalidadBot } from '@/lib/engine/bots';
+import { CasoSimulacion } from '@/lib/engine/cases';
+import { ConfiguracionBancoYEntorno, DecisionesEquipo, EstadoAnteriorEquipo, NivelProduccion } from '@/lib/engine/types';
+import { ApiError, MINUTO, noEncontrada, ruta } from '@/lib/api/http';
+import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { PLANTA_MAXIMA, esquemaCaso } from '@/lib/api/esquemas';
+import { ORDEN_EQUIPOS } from '@/lib/api/partida-visible';
 
-export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const game = await prisma.game.findUnique({
-      where: { id: params.id },
-      include: {
-        teams: {
-          include: {
-            decisions: true
-          }
-        },
-        rounds: {
-          orderBy: { periodo: 'desc' }
-        }
-      }
-    });
+const ULTIMO_PERIODO = 6;
 
-    if (!game) {
-      return NextResponse.json({ error: 'Partida no encontrada' }, { status: 404 });
-    }
-
-    const periodoActual = game.periodoActual;
-    if (periodoActual > 6) {
-      return NextResponse.json({ error: 'La partida ya ha finalizado todas sus rondas (0 a 6)' }, { status: 400 });
-    }
-
-    // Configuración del caso para la ronda actual
-    let caso: CasoSimulacion;
-    try {
-      caso = JSON.parse(game.configCasoJson);
-    } catch {
-      return NextResponse.json({ error: 'Error al parsear la configuración del caso' }, { status: 500 });
-    }
-
-    const pIdx = Math.min(6, Math.max(0, periodoActual));
-    const configPeriodo: CasoPeriodoConfig = caso.periodos[pIdx] || caso.periodos[0];
-
-    // Verificar o generar decisiones para cada equipo
-    const equiposParaSimulacion: Array<{
-      id: string;
-      nombre: string;
-      estado: EstadoAnteriorEquipo;
-      decisiones: DecisionesEquipo;
-      configBancos?: ConfiguracionBancoYEntorno;
-    }> = [];
-
-    // Calcular estadísticas de la ronda anterior para los bots
-    let precioPromedioAnterior = 89;
-    if (game.rounds.length > 0) {
-      try {
-        const lastRound = JSON.parse(game.rounds[0].resultadoJson);
-        if (lastRound.precio_promedio) {
-          precioPromedioAnterior = lastRound.precio_promedio;
-        }
-      } catch {}
-    }
-
-    for (const team of game.teams) {
-      let decision = team.decisions.find(d => d.periodo === periodoActual);
-
-      if (!decision && !team.esHumano) {
-        // Es un bot de IA: generar decisión automáticamente
-        const botCtx = {
-          equipo_id: team.id,
-          nombre: team.nombre,
-          personalidad: (team.personalidad as PersonalidadBot) || 'equilibrado',
-          estado: {
-            planta: team.planta,
-            capital: team.capital,
-            efectivo: team.efectivo,
-            stock_unidades: team.stockUnidades,
-            stock_valorizado: team.stockValorizado,
-            capacitacion_acumulada: team.capacitacionAcum,
-            id_acumulado: team.idAcumulado,
-            empleados: team.empleados,
-            prestamos_bco_a: team.prestamosBcoA,
-            prestamos_bco_b: team.prestamosBcoB,
-            utilidad_acumulada: team.utilidadAcumulada,
-            periodo: periodoActual
-          },
-          caso_config: configPeriodo,
-          historial_mercado: {
-            precio_promedio_anterior: precioPromedioAnterior,
-            stock_anterior: team.stockUnidades
-          }
-        };
-
-        const botRes = await LLMBotAgent.tomarDecision(botCtx);
-        
-        decision = await prisma.roundDecision.create({
-          data: {
-            teamId: team.id,
-            periodo: periodoActual,
-            precio: botRes.decisiones.precio,
-            marketing: botRes.decisiones.marketing,
-            invDes: botRes.decisiones.inv_des,
-            capacitacion: botRes.decisiones.capacitacion,
-            nivelProd: botRes.decisiones.nivel_prod,
-            amplPlanta: botRes.decisiones.ampl_planta,
-            pedPrestA: botRes.decisiones.ped_prest_a,
-            devPrestA: botRes.decisiones.dev_prest_a,
-            pedPrestB: botRes.decisiones.ped_prest_b,
-            devPrestB: botRes.decisiones.dev_prest_b,
-            razonamiento: botRes.razonamiento_estrategico
-          }
-        });
-      }
-
-      if (!decision && team.esHumano) {
-        return NextResponse.json({
-          error: `El equipo humano "${team.nombre}" aún no ha cargado sus decisiones para el período ${periodoActual}`
-        }, { status: 400 });
-      }
-
-      const decEquipo: DecisionesEquipo = {
-        precio: decision!.precio,
-        marketing: decision!.marketing,
-        inv_des: decision!.invDes,
-        capacitacion: decision!.capacitacion,
-        nivel_prod: decision!.nivelProd as NivelProduccion,
-        ampl_planta: decision!.amplPlanta,
-        ped_prest_a: decision!.pedPrestA,
-        dev_prest_a: decision!.devPrestA,
-        ped_prest_b: decision!.pedPrestB,
-        dev_prest_b: decision!.devPrestB
-      };
-
-      const estEquipo: EstadoAnteriorEquipo = {
-        planta: team.planta,
-        capital: team.capital,
-        efectivo: team.efectivo,
-        stock_unidades: team.stockUnidades,
-        stock_valorizado: team.stockValorizado,
-        capacitacion_acumulada: team.capacitacionAcum,
-        id_acumulado: team.idAcumulado,
-        empleados: team.empleados,
-        prestamos_bco_a: team.prestamosBcoA,
-        prestamos_bco_b: team.prestamosBcoB,
-        utilidad_acumulada: team.utilidadAcumulada,
-        periodo: periodoActual
-      };
-
-      equiposParaSimulacion.push({
-        id: team.id,
-        nombre: team.nombre,
-        estado: estEquipo,
-        decisiones: decEquipo,
-        configBancos: configPeriodo.config_bancos
-      });
-    }
-
-    // Ejecutar el motor de mercado de TypeScript
-    const resultadoRonda = SimuladorEmpresarial.simularRondaMercado(
-      equiposParaSimulacion,
-      periodoActual,
-      configPeriodo.parametros_demanda
-    );
-
-    // Persistir resultados en una transacción de base de datos
-    await prisma.$transaction(async (tx) => {
-      // 1. Guardar el snapshot de la ronda
-      await tx.roundReport.upsert({
-        where: {
-          gameId_periodo: {
-            gameId: game.id,
-            periodo: periodoActual
-          }
-        },
-        update: {
-          resultadoJson: JSON.stringify(resultadoRonda)
-        },
-        create: {
-          gameId: game.id,
-          periodo: periodoActual,
-          resultadoJson: JSON.stringify(resultadoRonda)
-        }
-      });
-
-      // 2. Actualizar el estado financiero acumulado de cada equipo
-      for (const eq of equiposParaSimulacion) {
-        const res = resultadoRonda.resultados_equipos[eq.id];
-        await tx.team.update({
-          where: { id: eq.id },
-          data: {
-            planta: res.proximo_periodo.planta,
-            efectivo: res.balance.efectivo,
-            stockUnidades: res.reporte_comercial.stock_unidades,
-            stockValorizado: res.balance.stock_valorizado,
-            capacitacionAcum: res.proximo_periodo.capacitacion_acumulada,
-            idAcumulado: res.proximo_periodo.id_acumulado,
-            empleados: res.reporte_produccion.empleados,
-            prestamosBcoA: res.reporte_creditos.prestamos_a,
-            prestamosBcoB: res.reporte_creditos.prestamos_b,
-            utilidadAcumulada: res.balance.util_acumulada
-          }
-        });
-      }
-
-      // 3. Avanzar el período de juego
-      const proximoPeriodo = periodoActual + 1;
-      await tx.game.update({
-        where: { id: game.id },
-        data: {
-          periodoActual: proximoPeriodo,
-          estado: proximoPeriodo > 6 ? 'finalizada' : 'en_curso'
-        }
-      });
-    });
-
-    return NextResponse.json({
-      success: true,
-      periodoSimulado: periodoActual,
-      proximoPeriodo: periodoActual + 1,
-      resultado: resultadoRonda
-    });
-  } catch (error: any) {
-    console.error('Error al simular ronda:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+/** Aplica a los bots los mismos límites que a los equipos: un LLM puede devolver cualquier valor. */
+function limitarDecisionBot(
+  { decisiones: d }: BotDecisionOutput,
+  estado: EstadoAnteriorEquipo,
+  bancos: ConfiguracionBancoYEntorno
+): DecisionesEquipo {
+  const devA = Math.min(d.dev_prest_a, estado.prestamos_bco_a ?? 0);
+  const devB = Math.min(d.dev_prest_b, estado.prestamos_bco_b ?? 0);
+  const cupoA = Math.max(0, bancos.max_cred_a - (estado.prestamos_bco_a ?? 0) + devA);
+  const cupoB = Math.max(0, bancos.max_cred_b - (estado.prestamos_bco_b ?? 0) + devB);
+  return {
+    ...d,
+    ampl_planta: Math.min(d.ampl_planta, Math.max(0, PLANTA_MAXIMA - estado.planta)),
+    dev_prest_a: devA,
+    dev_prest_b: devB,
+    ped_prest_a: Math.min(d.ped_prest_a, cupoA),
+    ped_prest_b: Math.min(d.ped_prest_b, cupoB)
+  };
 }
+
+export const POST = ruta<{ id: string }>({ bucket: 'simular', max: 30, ventanaMs: MINUTO }, async (_req, { id }) => {
+  const partida = await prisma.game.findFirst({
+    where: await filtroPartidaPropia(id),
+    include: {
+      teams: { orderBy: ORDEN_EQUIPOS, include: { decisions: true } },
+      rounds: { orderBy: { periodo: 'desc' }, take: 1 }
+    }
+  });
+  if (!partida) throw noEncontrada();
+  if (partida.estado !== 'en_curso' || partida.periodoActual > ULTIMO_PERIODO) {
+    throw new ApiError(409, 'La partida ya finalizó');
+  }
+
+  const periodo = partida.periodoActual;
+  const pendiente = partida.teams.find(t => t.esHumano && !t.decisions.some(d => d.periodo === periodo));
+  if (pendiente) {
+    throw new ApiError(409, `Falta que "${pendiente.nombre}" guarde sus decisiones del período ${periodo}`);
+  }
+
+  const caso = esquemaCaso.parse(JSON.parse(partida.configCasoJson)) as unknown as CasoSimulacion;
+  const configPeriodo = caso.periodos[periodo];
+
+  let precioPromedioAnterior = 89;
+  if (partida.rounds[0]) {
+    precioPromedioAnterior = JSON.parse(partida.rounds[0].resultadoJson).precio_promedio || 89;
+  }
+
+  // Los bots pueden demorar por el LLM: se resuelven antes de abrir la transacción.
+  const equipos = await Promise.all(partida.teams.map(async (equipo) => {
+    const estado: EstadoAnteriorEquipo = {
+      planta: equipo.planta,
+      capital: equipo.capital,
+      efectivo: equipo.efectivo,
+      stock_unidades: equipo.stockUnidades,
+      stock_valorizado: equipo.stockValorizado,
+      capacitacion_acumulada: equipo.capacitacionAcum,
+      id_acumulado: equipo.idAcumulado,
+      empleados: equipo.empleados,
+      prestamos_bco_a: equipo.prestamosBcoA,
+      prestamos_bco_b: equipo.prestamosBcoB,
+      utilidad_acumulada: equipo.utilidadAcumulada,
+      periodo
+    };
+
+    const guardada = equipo.decisions.find(d => d.periodo === periodo);
+    if (guardada) {
+      const decisiones: DecisionesEquipo = {
+        precio: guardada.precio,
+        marketing: guardada.marketing,
+        inv_des: guardada.invDes,
+        capacitacion: guardada.capacitacion,
+        nivel_prod: guardada.nivelProd as NivelProduccion,
+        ampl_planta: guardada.amplPlanta,
+        ped_prest_a: guardada.pedPrestA,
+        dev_prest_a: guardada.devPrestA,
+        ped_prest_b: guardada.pedPrestB,
+        dev_prest_b: guardada.devPrestB
+      };
+      return { id: equipo.id, nombre: equipo.nombre, estado, decisiones, razonamiento: null, nueva: false };
+    }
+
+    const salida = await LLMBotAgent.tomarDecision({
+      equipo_id: equipo.id,
+      nombre: equipo.nombre,
+      personalidad: (equipo.personalidad as PersonalidadBot) || 'equilibrado',
+      estado,
+      caso_config: configPeriodo,
+      historial_mercado: { precio_promedio_anterior: precioPromedioAnterior, stock_anterior: equipo.stockUnidades }
+    });
+    return {
+      id: equipo.id,
+      nombre: equipo.nombre,
+      estado,
+      decisiones: limitarDecisionBot(salida, estado, configPeriodo.config_bancos),
+      razonamiento: salida.razonamiento_estrategico,
+      nueva: true
+    };
+  }));
+
+  const resultado = SimuladorEmpresarial.simularRondaMercado(
+    equipos.map(e => ({ ...e, configBancos: configPeriodo.config_bancos })),
+    periodo,
+    configPeriodo.parametros_demanda
+  );
+
+  const proximoPeriodo = periodo + 1;
+
+  await prisma.$transaction(async (tx) => {
+    // Va primero: si dos pedidos simulan a la vez, solo uno avanza la ronda y el otro no escribe nada.
+    const { count } = await tx.game.updateMany({
+      where: { id: partida.id, periodoActual: periodo, estado: 'en_curso' },
+      data: {
+        periodoActual: proximoPeriodo,
+        estado: proximoPeriodo > ULTIMO_PERIODO ? 'finalizada' : 'en_curso'
+      }
+    });
+    if (count === 0) throw new ApiError(409, 'Esta ronda ya fue simulada');
+
+    await tx.roundReport.create({
+      data: { gameId: partida.id, periodo, resultadoJson: JSON.stringify(resultado) }
+    });
+
+    for (const equipo of equipos) {
+      if (equipo.nueva) {
+        const d = equipo.decisiones;
+        await tx.roundDecision.create({
+          data: {
+            teamId: equipo.id,
+            periodo,
+            precio: d.precio,
+            marketing: d.marketing,
+            invDes: d.inv_des,
+            capacitacion: d.capacitacion,
+            nivelProd: d.nivel_prod,
+            amplPlanta: d.ampl_planta,
+            pedPrestA: d.ped_prest_a,
+            devPrestA: d.dev_prest_a,
+            pedPrestB: d.ped_prest_b,
+            devPrestB: d.dev_prest_b,
+            razonamiento: equipo.razonamiento
+          }
+        });
+      }
+
+      const res = resultado.resultados_equipos[equipo.id];
+      await tx.team.update({
+        where: { id: equipo.id },
+        data: {
+          planta: res.proximo_periodo.planta,
+          efectivo: res.balance.efectivo,
+          stockUnidades: res.reporte_comercial.stock_unidades,
+          stockValorizado: res.balance.stock_valorizado,
+          capacitacionAcum: res.proximo_periodo.capacitacion_acumulada,
+          idAcumulado: res.proximo_periodo.id_acumulado,
+          empleados: res.reporte_produccion.empleados,
+          prestamosBcoA: res.reporte_creditos.prestamos_a,
+          prestamosBcoB: res.reporte_creditos.prestamos_b,
+          utilidadAcumulada: res.balance.util_acumulada
+        }
+      });
+    }
+  });
+
+  // El resultado se lee con GET, que aplica las reglas de qué puede verse en cada modo.
+  return NextResponse.json({ success: true, periodoSimulado: periodo, proximoPeriodo });
+});
