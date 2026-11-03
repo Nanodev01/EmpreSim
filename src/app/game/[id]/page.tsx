@@ -44,7 +44,9 @@ import {
   Copy,
   Wifi,
   UserMinus,
-  Unplug
+  Unplug,
+  KeyRound,
+  Eye
 } from 'lucide-react';
 import { SimuladorEmpresarial } from '@/lib/engine/simulator';
 import { DecisionesEquipo, NivelProduccion, ResultadoSimulacionEquipo, ResultadoRondaMercado } from '@/lib/engine/types';
@@ -52,6 +54,49 @@ import { CasoSimulacion, CasoPeriodoConfig } from '@/lib/engine/cases';
 import { FeedbackEquipo } from '@/lib/ai/coach';
 
 const SONDEO_MS = 4000;
+
+const formatearCodigoCoordinador = (codigo: string) => codigo.match(/.{1,4}/g)?.join('-') ?? codigo;
+
+/** Oculto por defecto: la sala suele estar proyectada para que los equipos copien el código de la partida. */
+function CodigoCoordinador({ codigo, onCopiar }: { codigo: string; onCopiar: (texto: string) => void }) {
+  const [visible, setVisible] = useState(false);
+  const formateado = formatearCodigoCoordinador(codigo);
+
+  return (
+    <div className="bg-slate-900/60 border border-amber-500/30 rounded-2xl p-5 shadow-xl space-y-3">
+      <div>
+        <h3 className="font-bold text-sm text-white flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-amber-400" />
+          Tu código de coordinador
+        </h3>
+        <p className="text-xs text-slate-400 mt-1">
+          Guardalo en un lugar seguro y no lo compartas ni lo proyectes. Si cambiás de navegador o se borran las cookies, es la única forma de recuperar esta partida en /recuperar.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <code data-testid="codigo-coordinador" className="w-full sm:w-auto sm:flex-1 min-w-0 px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl font-mono text-sm text-amber-300 break-all">
+          {visible ? formateado : '••••-••••-••••-••••'}
+        </code>
+        <button
+          type="button"
+          onClick={() => setVisible(v => !v)}
+          className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700 inline-flex items-center gap-2"
+        >
+          {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          <span>{visible ? 'Ocultar' : 'Mostrar'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onCopiar(formateado)}
+          className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700 inline-flex items-center gap-2"
+        >
+          <Copy className="w-4 h-4" />
+          <span>Copiar</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 type CampoNumerico = number | '';
 
@@ -195,6 +240,11 @@ export default function GameDashboardPage() {
           setMensajeTurno('📊 Se cerró el ciclo: ya está el ranking de la ronda.');
           setTimeout(() => setMensajeTurno(null), 5000);
         }
+      }
+
+      // Si otro navegador recuperó la coordinación, este deja de ver las pestañas del coordinador.
+      if (!data.visor?.esCoordinador && (activeTab === 'sala' || activeTab === 'coordinador')) {
+        setActiveTab(miEquipoId ? 'cupon' : 'mercado');
       }
 
       // Si la partida ya fue finalizada, sugerir la pestaña de resumen
@@ -685,6 +735,9 @@ export default function GameDashboardPage() {
         <p className="text-sm font-medium max-w-md">
           No tenés acceso a esta partida desde este navegador. Si formás parte de ella, entrá con el código que te compartieron.
         </p>
+        <Link href="/recuperar" className="text-xs underline hover:text-white">
+          Soy el coordinador y tengo mi código
+        </Link>
         <Link href="/" className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl">
           Volver al inicio
         </Link>
@@ -1086,6 +1139,10 @@ export default function GameDashboardPage() {
                 )}
               </div>
             </div>
+
+            {game.codigoCoordinador && (
+              <CodigoCoordinador codigo={game.codigoCoordinador} onCopiar={copiarInvitacion} />
+            )}
 
             <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
               <h3 className="font-bold text-sm text-white">
@@ -2453,6 +2510,10 @@ export default function GameDashboardPage() {
                 Modificá las reglas macroeconómicas, tasas de interés y penalidades para simular shocks sorpresivos entre rondas.
               </p>
             </div>
+
+            {game.codigoCoordinador && (
+              <CodigoCoordinador codigo={game.codigoCoordinador} onCopiar={copiarInvitacion} />
+            )}
 
             {/* Control de Modo: Práctica vs Competitivo */}
             <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${

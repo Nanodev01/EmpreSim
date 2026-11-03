@@ -53,7 +53,7 @@ function rondaSoloRanking(ronda: RoundReport, miEquipoId: string | null): RoundR
  * - En modo práctica se ven las rondas ya simuladas, porque sus resultados ya se publicaron.
  */
 export function partidaVisible(partida: PartidaCompleta, visor: Visor) {
-  const { claveHash: _claveHash, ...datos } = partida;
+  const { claveHash: _claveHash, codigoCoordinador, ...datos } = partida;
   const finalizada = partida.estado === 'finalizada';
   const oculto = partida.modoCompetitivo && !finalizada;
   const online = partida.dispositivos === 'multiple';
@@ -63,6 +63,8 @@ export function partidaVisible(partida: PartidaCompleta, visor: Visor) {
   return {
     ...datos,
     visor,
+    // Da control total de la partida: solo lo recibe quien ya la coordina.
+    ...(visor.esCoordinador ? { codigoCoordinador } : {}),
     rounds: oculto ? partida.rounds.map(r => rondaSoloRanking(r, propio)) : partida.rounds,
     teams: partida.teams.map(({ claveHash: claveEquipo, ...equipo }) => {
       const yaGuardo = equipo.decisions.some(d => d.periodo === partida.periodoActual);

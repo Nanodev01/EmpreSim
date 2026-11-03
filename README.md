@@ -7,6 +7,8 @@ Se puede jugar de dos formas:
 - **Cada equipo en su dispositivo:** quien crea la partida comparte un código o link y cada equipo se une con el nombre que elija. Su navegador queda asociado al equipo; si cambia de dispositivo, el coordinador puede liberarlo para retomarlo.
 - **Una sola computadora:** los equipos cargan por turnos en la misma pantalla. Ideal para practicar antes de un certamen.
 
+Quien crea la partida la coordina desde ese navegador. Si lo pierde (otro dispositivo, cookies borradas), la recupera en `/recuperar` con el código de coordinador que se muestra en la partida; el código cambia con cada uso.
+
 ## Desarrollo
 
 ```bash

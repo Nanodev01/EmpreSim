@@ -19,6 +19,7 @@ model Game {
   claveHash     String   // Hash de la clave anónima del navegador que creó la partida (coordinador)
   dispositivos  String   @default("unico") // "unico" (una computadora) | "multiple" (cada equipo en su dispositivo)
   codigo        String?  @unique // Código para unirse; solo en partidas de varios dispositivos
+  codigoCoordinador String? @unique // Código secreto para recuperar la coordinación desde otro navegador
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

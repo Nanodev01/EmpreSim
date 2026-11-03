@@ -592,6 +592,9 @@ export default function LobbyPage() {
                 Unirme
               </button>
             </div>
+            <Link href="/recuperar" className="block text-[11px] text-slate-400 underline hover:text-white">
+              ¿Coordinabas una partida y perdiste el acceso?
+            </Link>
           </form>
 
           {/* Tarjeta Didáctica para Alumnos */}

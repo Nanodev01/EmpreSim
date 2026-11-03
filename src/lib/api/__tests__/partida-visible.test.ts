@@ -143,3 +143,12 @@ test('online competitivo: el coordinador tampoco ve los valores hasta el final',
   assert.equal(buscar(vista, 'a').decisions.length, 0);
   assert.deepEqual(JSON.parse(vista.rounds[0].resultadoJson).resultados_equipos, {});
 });
+
+test('el código de coordinador solo llega a quien coordina', () => {
+  const p = partida({ dispositivos: 'multiple', codigoCoordinador: 'SECRETO123' });
+  assert.equal(partidaVisible(p, COORDINADOR).codigoCoordinador, 'SECRETO123');
+
+  const deEquipo = partidaVisible(p, { esCoordinador: false, miEquipoId: 'a' });
+  assert.equal('codigoCoordinador' in deEquipo, false);
+  assert.equal(JSON.stringify(deEquipo).includes('SECRETO123'), false);
+});

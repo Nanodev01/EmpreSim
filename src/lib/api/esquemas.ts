@@ -46,6 +46,10 @@ export const esquemaUnirse = z.union([
   z.strictObject({ teamId: z.string().min(1).max(64) })
 ], { error: 'Escribí el nombre de tu equipo' });
 
+export const esquemaRecuperar = z.strictObject({
+  codigo: z.string().trim().min(1, 'Ingresá el código de coordinador').max(40, 'El código es demasiado largo')
+});
+
 export const esquemaSimular = z.object({
   forzar: z.boolean().optional()
 });

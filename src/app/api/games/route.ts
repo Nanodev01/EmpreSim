@@ -4,7 +4,7 @@ import { getCasoPorId } from '@/lib/engine/cases';
 import { PersonalidadBot } from '@/lib/engine/bots';
 import { ApiError, HORA, MINUTO, leerJson, ruta } from '@/lib/api/http';
 import { hashClaveActual, obtenerOCrearHashClave } from '@/lib/api/clave-navegador';
-import { generarCodigoUnion } from '@/lib/api/codigo-union';
+import { generarCodigoCoordinador, generarCodigoUnion } from '@/lib/api/codigo-union';
 import { esquemaNuevaPartida } from '@/lib/api/esquemas';
 
 const NOMBRES_BOTS: Record<PersonalidadBot, string> = {
@@ -78,6 +78,7 @@ export const POST = ruta<object>({ bucket: 'crear', max: 30, ventanaMs: HORA }, 
           modoCompetitivo: Boolean(datos.modoCompetitivo),
           dispositivos: online ? 'multiple' : 'unico',
           codigo: online ? generarCodigoUnion() : null,
+          codigoCoordinador: generarCodigoCoordinador(),
           claveHash,
           teams: {
             create: [
