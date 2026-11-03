@@ -283,7 +283,7 @@ export default function GameDashboardPage() {
     if (!game) return;
 
     const aviso = game.modoCompetitivo
-      ? `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se pasa a la ronda siguiente.`
+      ? `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se publica el ranking.`
       : `¿Finalizar el ciclo del Período ${game.periodoActual}? Se simula el mercado y se muestran los resultados.`;
     if (!confirm(aviso)) return;
 
@@ -298,15 +298,7 @@ export default function GameDashboardPage() {
 
       const { proximoPeriodo } = await res.json();
       await fetchGame();
-      if (!game.modoCompetitivo) {
-        setActiveTab('mercado');
-      } else if (proximoPeriodo > 6) {
-        setActiveTab('resumen');
-      } else {
-        setActiveTab('cupon');
-        setMensajeTurno(`🔥 Ciclo terminado. Comienza el Período ${proximoPeriodo}.`);
-        setTimeout(() => setMensajeTurno(null), 4000);
-      }
+      setActiveTab(game.modoCompetitivo && proximoPeriodo > 6 ? 'resumen' : 'mercado');
     } catch (err) {
       alert('Error de red al finalizar el ciclo');
     } finally {
@@ -872,7 +864,6 @@ export default function GameDashboardPage() {
           )}
 
           {!resultadosOcultos && (
-          <>
           <button
             onClick={() => setActiveTab('reporte')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -884,6 +875,7 @@ export default function GameDashboardPage() {
             <FileText className="w-4 h-4" />
             Reporte Financiero Oficial
           </button>
+          )}
 
           <button
             onClick={() => setActiveTab('mercado')}
@@ -897,6 +889,7 @@ export default function GameDashboardPage() {
             Mercado y Ranking
           </button>
 
+          {!resultadosOcultos && (
           <button
             onClick={() => setActiveTab('resumen')}
             className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
@@ -911,7 +904,6 @@ export default function GameDashboardPage() {
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             )}
           </button>
-          </>
           )}
 
           <button
@@ -940,7 +932,7 @@ export default function GameDashboardPage() {
             <h2 className="font-bold text-lg text-white">Todos los equipos guardaron sus resultados</h2>
             <p className="text-sm text-slate-400">
               {game.modoCompetitivo
-                ? 'Al finalizar el ciclo se simula el mercado y comienza la ronda siguiente. Los resultados se publican al terminar la partida.'
+                ? 'Al finalizar el ciclo se simula el mercado y se publica el ranking, sin mostrar los precios ni el marketing de cada equipo. El detalle completo se publica al terminar la partida.'
                 : 'Al finalizar el ciclo se simula el mercado y se muestran los resultados de la ronda.'}
             </p>
             <button
@@ -1679,8 +1671,8 @@ export default function GameDashboardPage() {
                         Tabla de Posiciones del Mercado (Período {ultimoReporte.periodo})
                       </h2>
                       <p className="text-xs text-slate-400">
-                        Total Unidades Vendidas: <strong className="text-emerald-400">{ultimoReporte.total_mercado_unidades.toLocaleString()} u.</strong> • 
-                        Precio Promedio: <strong className="text-white">${ultimoReporte.precio_promedio.toFixed(2)} u$s</strong>
+                        Total Unidades Vendidas: <strong className="text-emerald-400">{ultimoReporte.total_mercado_unidades.toLocaleString()} u.</strong>
+                        {!resultadosOcultos && <> • Precio Promedio: <strong className="text-white">${ultimoReporte.precio_promedio.toFixed(2)} u$s</strong></>}
                       </p>
                     </div>
                     <span className="text-xs font-mono text-slate-400 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 self-start sm:self-auto">
@@ -1694,9 +1686,9 @@ export default function GameDashboardPage() {
                         <tr>
                           <th className="py-3 px-3 rounded-l-xl">Pos</th>
                           <th className="py-3 px-3">Equipo</th>
-                          <th className="py-3 px-3 text-right">Precio</th>
-                          <th className="py-3 px-3 text-right">Marketing</th>
-                          <th className="py-3 px-3 text-right">Órdenes</th>
+                          {!resultadosOcultos && <th className="py-3 px-3 text-right">Precio</th>}
+                          {!resultadosOcultos && <th className="py-3 px-3 text-right">Marketing</th>}
+                          {!resultadosOcultos && <th className="py-3 px-3 text-right">Órdenes</th>}
                           <th className="py-3 px-3 text-right">Ventas</th>
                           <th className="py-3 px-3 text-right">Cuota %</th>
                           <th className="py-3 px-3 text-right">Util. Período</th>
@@ -1741,9 +1733,13 @@ export default function GameDashboardPage() {
                                   </span>
                                 </div>
                               </td>
-                              <td className="py-3 px-3 text-right font-bold text-white">${item.precio}</td>
-                              <td className="py-3 px-3 text-right text-slate-300">${item.marketing.toLocaleString()}</td>
-                              <td className="py-3 px-3 text-right text-slate-300">{item.ordenes_recibidas} u.</td>
+                              {!resultadosOcultos && (
+                                <>
+                                  <td className="py-3 px-3 text-right font-bold text-white">${item.precio}</td>
+                                  <td className="py-3 px-3 text-right text-slate-300">${item.marketing.toLocaleString()}</td>
+                                  <td className="py-3 px-3 text-right text-slate-300">{item.ordenes_recibidas} u.</td>
+                                </>
+                              )}
                               <td className="py-3 px-3 text-right font-bold text-white">{item.ventas_unidades} u.</td>
                               <td className="py-3 px-3 text-right font-bold text-emerald-400">{item.cuota_mercado_pct.toFixed(1)}%</td>
                               <td className={`py-3 px-3 text-right font-bold ${item.utilidad_periodo < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>

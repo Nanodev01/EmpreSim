@@ -464,7 +464,7 @@ export default function LobbyPage() {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    Oculta la calculadora preventiva, las pistas y los resultados de cada ronda hasta el final de la partida. Los alumnos deberán proyectar sus costos y flujo de caja manualmente.
+                    Oculta la calculadora preventiva y las pistas. Entre rondas solo se publica el ranking, sin precios ni marketing de los demás, y el detalle completo se ve al final. Los alumnos deberán proyectar sus costos y flujo de caja manualmente.
                   </p>
                 </div>
 
