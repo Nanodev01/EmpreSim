@@ -5,7 +5,8 @@ import { BotHeuristico, LLMBotAgent, PersonalidadBot } from '@/lib/engine/bots';
 import { CasoSimulacion, CasoPeriodoConfig } from '@/lib/engine/cases';
 import { DecisionesEquipo, EstadoAnteriorEquipo, NivelProduccion, ConfiguracionBancoYEntorno } from '@/lib/engine/types';
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const game = await prisma.game.findUnique({
       where: { id: params.id },

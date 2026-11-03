@@ -3,7 +3,8 @@ import { prisma } from '@/lib/db';
 import { BusinessCoachAI, CoachContextoEquipo } from '@/lib/ai/coach';
 import { ResultadoRondaMercado } from '@/lib/engine/types';
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const body = await req.json().catch(() => ({}));
     const { teamId, apiKey, provider, model } = body;
