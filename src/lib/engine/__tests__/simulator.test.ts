@@ -1,7 +1,7 @@
 /**
  * simulator.test.ts
  * Suite de verificación exhaustiva del motor en TypeScript.
- * Garantiza 100% de coincidencia exacta con el binario legacy y los ejemplos oficiales.
+ * La comparación contra el reporte oficial está en reporte-oficial.test.ts.
  */
 
 import { SimuladorEmpresarial, ESCENARIOS_ORIGINALES, CONFIG_BANCOS_DEFAULT } from '../simulator';

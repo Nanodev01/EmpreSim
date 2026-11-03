@@ -1,7 +1,8 @@
 /**
  * simulator.ts
  * Motor matemático de simulación empresarial en TypeScript.
- * Port fiel al 100% de la lógica desensamblada de SimulacionDEMO.exe y validada en simulador.py.
+ * Port de la lógica desensamblada de SimulacionDEMO.exe. Los costos salen de Planilla-de-Costos.xls,
+ * por lo que los importes pueden diferir unos pocos dólares de los reportes del ejecutable.
  */
 
 import matrizDemandaRaw from '@/data/matriz_demanda.json';
@@ -72,10 +73,14 @@ export const CONFIG_BANCOS_DEFAULT: ConfiguracionBancoYEntorno = {
 
 export class SimuladorEmpresarial {
   /**
-   * Emula el redondeo estándar de Delphi FPU (_ROUND / Banker's rounding)
+   * Emula Round() de Delphi: redondeo bancario (los empates .5 van al par más cercano).
    */
   public static delphiRound(val: number): number {
-    return Math.round(val);
+    const piso = Math.floor(val);
+    const diferencia = val - piso;
+    if (diferencia < 0.5) return piso;
+    if (diferencia > 0.5) return piso + 1;
+    return piso % 2 === 0 ? piso : piso + 1;
   }
 
   /**
