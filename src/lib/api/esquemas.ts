@@ -37,7 +37,17 @@ export const esquemaNuevaPartida = z.object({
   nombreEmpresa: z.string().trim().max(80).optional(),
   personalidadesBots: z.array(z.enum(PERSONALIDADES)).max(8).optional(),
   equiposAlumnos: z.array(z.string().trim().max(80)).max(MAX_EQUIPOS).optional(),
-  modoCompetitivo: z.boolean().optional()
+  modoCompetitivo: z.boolean().optional(),
+  dispositivos: z.enum(['unico', 'multiple']).default('unico')
+});
+
+export const esquemaUnirse = z.union([
+  z.strictObject({ nombre: z.string().trim().min(1, 'Escribí el nombre de tu equipo').max(80, 'El nombre es demasiado largo') }),
+  z.strictObject({ teamId: z.string().min(1).max(64) })
+], { error: 'Escribí el nombre de tu equipo' });
+
+export const esquemaSimular = z.object({
+  forzar: z.boolean().optional()
 });
 
 export const esquemaNuevoEquipo = z.object({

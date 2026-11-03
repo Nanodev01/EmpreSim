@@ -4,9 +4,9 @@ import { SimuladorEmpresarial } from '@/lib/engine/simulator';
 import { BotDecisionOutput, LLMBotAgent, PersonalidadBot } from '@/lib/engine/bots';
 import { CasoSimulacion } from '@/lib/engine/cases';
 import { ConfiguracionBancoYEntorno, DecisionesEquipo, EstadoAnteriorEquipo, NivelProduccion } from '@/lib/engine/types';
-import { ApiError, MINUTO, noEncontrada, ruta } from '@/lib/api/http';
+import { ApiError, MINUTO, leerJson, noEncontrada, ruta } from '@/lib/api/http';
 import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
-import { PLANTA_MAXIMA, esquemaCaso } from '@/lib/api/esquemas';
+import { PLANTA_MAXIMA, esquemaCaso, esquemaSimular } from '@/lib/api/esquemas';
 import { ORDEN_EQUIPOS } from '@/lib/api/partida-visible';
 
 const ULTIMO_PERIODO = 6;
@@ -31,7 +31,24 @@ function limitarDecisionBot(
   };
 }
 
-export const POST = ruta<{ id: string }>({ bucket: 'simular', max: 30, ventanaMs: MINUTO }, async (_req, { id }) => {
+/** Equipo ausente al cerrar el ciclo a la fuerza: mantiene su último precio, sin producir ni invertir. */
+function decisionPorOmision(ultimoPrecio: number | undefined): DecisionesEquipo {
+  return {
+    precio: ultimoPrecio ?? 89,
+    marketing: 0,
+    inv_des: 0,
+    capacitacion: 0,
+    nivel_prod: 0,
+    ampl_planta: 0,
+    ped_prest_a: 0,
+    dev_prest_a: 0,
+    ped_prest_b: 0,
+    dev_prest_b: 0
+  };
+}
+
+export const POST = ruta<{ id: string }>({ bucket: 'simular', max: 30, ventanaMs: MINUTO }, async (req, { id }) => {
+  const { forzar } = esquemaSimular.parse(await leerJson(req));
   const partida = await prisma.game.findFirst({
     where: await filtroPartidaPropia(id),
     include: {
@@ -45,8 +62,12 @@ export const POST = ruta<{ id: string }>({ bucket: 'simular', max: 30, ventanaMs
   }
 
   const periodo = partida.periodoActual;
+  const online = partida.dispositivos === 'multiple';
+  if (!partida.teams.some(t => t.esHumano)) {
+    throw new ApiError(409, 'Todavía no se unió ningún equipo');
+  }
   const pendiente = partida.teams.find(t => t.esHumano && !t.decisions.some(d => d.periodo === periodo));
-  if (pendiente) {
+  if (pendiente && !(online && forzar)) {
     throw new ApiError(409, `Falta que "${pendiente.nombre}" guarde sus decisiones del período ${periodo}`);
   }
 
@@ -90,6 +111,18 @@ export const POST = ruta<{ id: string }>({ bucket: 'simular', max: 30, ventanaMs
         dev_prest_b: guardada.devPrestB
       };
       return { id: equipo.id, nombre: equipo.nombre, estado, decisiones, razonamiento: null, nueva: false };
+    }
+
+    if (equipo.esHumano) {
+      const ultimaDecision = [...equipo.decisions].sort((a, b) => b.periodo - a.periodo)[0];
+      return {
+        id: equipo.id,
+        nombre: equipo.nombre,
+        estado,
+        decisiones: decisionPorOmision(ultimaDecision?.precio),
+        razonamiento: 'El equipo no cargó sus decisiones y el coordinador cerró el ciclo.',
+        nueva: true
+      };
     }
 
     const salida = await LLMBotAgent.tomarDecision({

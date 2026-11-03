@@ -15,6 +15,7 @@ export interface LimitePedidos {
   ventanaMs: number;
 }
 
+// Los límites son por IP y un aula completa suele compartir una: se fijan pensando en unos 40 dispositivos.
 export const MINUTO = 60_000;
 export const HORA = 60 * MINUTO;
 const MAX_BYTES_CUERPO = 256 * 1024;
@@ -76,6 +77,9 @@ export function ruta<P>(limite: LimitePedidos, manejador: Manejador<P>) {
       if (error instanceof ZodError) {
         const mensaje = error.issues[0]?.message ?? 'Datos inválidos';
         return NextResponse.json({ error: mensaje }, { status: 400 });
+      }
+      if ((error as { code?: string }).code === 'P2002') {
+        return NextResponse.json({ error: 'La operación entró en conflicto con otro cambio. Intentá de nuevo.' }, { status: 409 });
       }
       console.error(`Error no controlado en ${req.method} ${new URL(req.url).pathname}:`, error);
       return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

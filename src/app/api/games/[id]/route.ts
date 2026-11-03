@@ -1,25 +1,26 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ApiError, MINUTO, leerJson, noEncontrada, ruta } from '@/lib/api/http';
-import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { accesoParticipante, filtroPartidaPropia } from '@/lib/api/clave-navegador';
 import { esquemaActualizarPartida, esquemaCaso } from '@/lib/api/esquemas';
-import { ORDEN_EQUIPOS, partidaVisible } from '@/lib/api/partida-visible';
+import { ORDEN_EQUIPOS, partidaVisible, visorDe } from '@/lib/api/partida-visible';
 
 type Params = { id: string };
 
-export const GET = ruta<Params>({ bucket: 'lectura', max: 300, ventanaMs: MINUTO }, async (_req, { id }) => {
+export const GET = ruta<Params>({ bucket: 'lectura', max: 1500, ventanaMs: MINUTO }, async (_req, { id }) => {
+  const { claveHash, where } = await accesoParticipante(id);
   const partida = await prisma.game.findFirst({
-    where: await filtroPartidaPropia(id),
+    where,
     include: {
       teams: { orderBy: ORDEN_EQUIPOS, include: { decisions: { orderBy: { periodo: 'desc' } } } },
       rounds: { orderBy: { periodo: 'desc' } }
     }
   });
   if (!partida) throw noEncontrada();
-  return NextResponse.json(partidaVisible(partida));
+  return NextResponse.json(partidaVisible(partida, visorDe(partida, claveHash)));
 });
 
-export const PUT = ruta<Params>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (req, { id }) => {
+export const PUT = ruta<Params>({ bucket: 'escritura', max: 600, ventanaMs: MINUTO }, async (req, { id }) => {
   const datos = esquemaActualizarPartida.parse(await leerJson(req));
   const partida = await prisma.game.findFirst({
     where: await filtroPartidaPropia(id),
@@ -59,7 +60,7 @@ export const PUT = ruta<Params>({ bucket: 'escritura', max: 120, ventanaMs: MINU
   return NextResponse.json({ success: true });
 });
 
-export const DELETE = ruta<Params>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (_req, { id }) => {
+export const DELETE = ruta<Params>({ bucket: 'escritura', max: 600, ventanaMs: MINUTO }, async (_req, { id }) => {
   const { count } = await prisma.game.deleteMany({ where: await filtroPartidaPropia(id) });
   if (count === 0) throw noEncontrada();
   return NextResponse.json({ success: true });

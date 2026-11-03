@@ -31,9 +31,19 @@ export async function obtenerOCrearHashClave(req: Request): Promise<string> {
   return hashear(clave);
 }
 
-/** Filtro para buscar una partida solo si pertenece a este navegador. */
+/** Filtro para las acciones del coordinador: solo el navegador que creó la partida. */
 export async function filtroPartidaPropia(id: string) {
   const claveHash = await hashClaveActual();
   if (!claveHash) throw noEncontrada();
   return { id, claveHash };
+}
+
+/** Filtro para quien participa en la partida: el coordinador o un navegador asociado a un equipo. */
+export async function accesoParticipante(id: string) {
+  const claveHash = await hashClaveActual();
+  if (!claveHash) throw noEncontrada();
+  return {
+    claveHash,
+    where: { id, OR: [{ claveHash }, { teams: { some: { claveHash } } }] }
+  };
 }

@@ -3,15 +3,16 @@ import { prisma } from '@/lib/db';
 import { BusinessCoachAI, CoachContextoEquipo } from '@/lib/ai/coach';
 import { ResultadoRondaMercado } from '@/lib/engine/types';
 import { ApiError, HORA, leerJson, noEncontrada, ruta } from '@/lib/api/http';
-import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
+import { accesoParticipante } from '@/lib/api/clave-navegador';
 import { esquemaCoach } from '@/lib/api/esquemas';
-import { ORDEN_EQUIPOS } from '@/lib/api/partida-visible';
+import { ORDEN_EQUIPOS, visorDe } from '@/lib/api/partida-visible';
 
-export const POST = ruta<{ id: string }>({ bucket: 'coach', max: 20, ventanaMs: HORA }, async (req, { id }) => {
+export const POST = ruta<{ id: string }>({ bucket: 'coach', max: 120, ventanaMs: HORA }, async (req, { id }) => {
   const { teamId } = esquemaCoach.parse(await leerJson(req));
 
+  const { claveHash, where } = await accesoParticipante(id);
   const partida = await prisma.game.findFirst({
-    where: await filtroPartidaPropia(id),
+    where,
     include: {
       teams: { orderBy: ORDEN_EQUIPOS, include: { decisions: { orderBy: { periodo: 'asc' } } } },
       rounds: { orderBy: { periodo: 'asc' } }
@@ -24,8 +25,12 @@ export const POST = ruta<{ id: string }>({ bucket: 'coach', max: 20, ventanaMs: 
 
   const equipo = teamId
     ? partida.teams.find(t => t.id === teamId)
-    : partida.teams.find(t => t.esHumano) ?? partida.teams[0];
+    : partida.teams.find(t => t.claveHash === claveHash) ?? partida.teams.find(t => t.esHumano) ?? partida.teams[0];
   if (!equipo) throw new ApiError(404, 'Equipo no encontrado');
+  const visor = visorDe(partida, claveHash);
+  if (!visor.esCoordinador && equipo.id !== visor.miEquipoId) {
+    throw new ApiError(403, 'Solo podés pedir la devolución de tu propio equipo');
+  }
 
   const contexto: CoachContextoEquipo = {
     equipo: {

@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { equipoEnTurno, partidaVisible } from '../partida-visible';
+import { equipoEnTurno, partidaVisible as vistaDe, visorDe } from '../partida-visible';
+
+const COORDINADOR = { esCoordinador: true, miEquipoId: null };
+const partidaVisible = (p: any, visor: any = COORDINADOR) => vistaDe(p, visor);
 
 const decision = (teamId: string, periodo: number) => ({ id: `${teamId}-${periodo}`, teamId, periodo, precio: 77, marketing: 1234 }) as any;
 
 const equipo = (id: string, esHumano: boolean, decisions: any[]) => ({
   id,
+  claveHash: `clave-${id}`,
   gameId: 'g',
   nombre: id,
   esHumano,
@@ -94,4 +98,48 @@ test('al finalizar se revela lo simulado, pero nunca lo cargado sin simular', ()
   assert.equal(JSON.parse(vista.rounds[0].resultadoJson).ranking[0].precio, 77);
   assert.equal(buscar(vista, 'b').efectivo, 999);
   assert.deepEqual(buscar(vista, 'a').decisions.map((d: any) => d.periodo), [0]);
+});
+
+test('nunca expone la clave de un equipo', () => {
+  const vista = partidaVisible(partida({ dispositivos: 'multiple' }));
+  assert.equal(JSON.stringify(vista).includes('clave-a'), false);
+  assert.equal(buscar(vista, 'a').conectado, true);
+});
+
+test('reconoce al coordinador y al equipo de cada navegador', () => {
+  const p = partida({});
+  assert.deepEqual(visorDe(p, 'hash-secreto'), { esCoordinador: true, miEquipoId: null });
+  assert.deepEqual(visorDe(p, 'clave-b'), { esCoordinador: false, miEquipoId: 'b' });
+  assert.deepEqual(visorDe(p, null), { esCoordinador: false, miEquipoId: null });
+});
+
+test('online: cada equipo ve lo suyo, incluso la ronda en curso, y nada de los rivales', () => {
+  const p = partida({ dispositivos: 'multiple', modoCompetitivo: true });
+  const vista = partidaVisible(p, { esCoordinador: false, miEquipoId: 'a' });
+
+  const propio = buscar(vista, 'a');
+  assert.equal(propio.efectivo, 999);
+  assert.deepEqual(propio.decisions.map((d: any) => d.periodo).sort(), [0, 1]);
+
+  const rival = buscar(vista, 'b');
+  assert.equal(rival.efectivo, undefined);
+  assert.equal(rival.decisions.length, 0);
+
+  const ronda = JSON.parse(vista.rounds[0].resultadoJson);
+  assert.deepEqual(Object.keys(ronda.resultados_equipos), ['a']);
+  assert.equal('precio' in ronda.ranking[0], false);
+});
+
+test('online: el rival nunca ve la carga en curso de otro, ni en práctica', () => {
+  const p = partida({ dispositivos: 'multiple' });
+  const vista = partidaVisible(p, { esCoordinador: false, miEquipoId: 'b' });
+  assert.deepEqual(buscar(vista, 'a').decisions.map((d: any) => d.periodo), [0]);
+  assert.equal(buscar(vista, 'a').feedbackJson, null);
+});
+
+test('online competitivo: el coordinador tampoco ve los valores hasta el final', () => {
+  const vista = partidaVisible(partida({ dispositivos: 'multiple', modoCompetitivo: true }), COORDINADOR);
+  assert.equal(buscar(vista, 'a').efectivo, undefined);
+  assert.equal(buscar(vista, 'a').decisions.length, 0);
+  assert.deepEqual(JSON.parse(vista.rounds[0].resultadoJson).resultados_equipos, {});
 });

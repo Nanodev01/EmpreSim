@@ -16,7 +16,9 @@ model Game {
   estado        String   @default("creada") // "creada" | "en_curso" | "finalizada"
   configCasoJson String  // JSON de la configuración de caso personalizada o editable
   modoCompetitivo Boolean @default(false) // Si true, desactiva ayudas y oculta resultados hasta el final
-  claveHash     String   // Hash de la clave anónima del navegador que creó la partida
+  claveHash     String   // Hash de la clave anónima del navegador que creó la partida (coordinador)
+  dispositivos  String   @default("unico") // "unico" (una computadora) | "multiple" (cada equipo en su dispositivo)
+  codigo        String?  @unique // Código para unirse; solo en partidas de varios dispositivos
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -32,6 +34,7 @@ model Team {
   nombre        String
   esHumano      Boolean  @default(true)
   personalidad  String?  // "agresivo" | "premium" | "conservador" | "equilibrado"
+  claveHash     String?  // Navegador que maneja este equipo; null si está libre o la partida es de una computadora
   
   // Estado acumulado actual
   planta               Float   @default(50000.0)
@@ -54,6 +57,8 @@ model Team {
   decisions     RoundDecision[]
 
   @@index([gameId])
+  @@unique([gameId, claveHash])
+  @@index([claveHash])
 }
 
 model RoundDecision {

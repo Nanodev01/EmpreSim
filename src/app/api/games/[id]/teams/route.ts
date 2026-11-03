@@ -4,7 +4,7 @@ import { ApiError, MINUTO, leerJson, noEncontrada, ruta } from '@/lib/api/http';
 import { filtroPartidaPropia } from '@/lib/api/clave-navegador';
 import { MAX_EQUIPOS, esquemaNuevoEquipo } from '@/lib/api/esquemas';
 
-export const POST = ruta<{ id: string }>({ bucket: 'escritura', max: 120, ventanaMs: MINUTO }, async (req, { id }) => {
+export const POST = ruta<{ id: string }>({ bucket: 'escritura', max: 600, ventanaMs: MINUTO }, async (req, { id }) => {
   const { nombre } = esquemaNuevoEquipo.parse(await leerJson(req));
 
   const partida = await prisma.game.findFirst({
@@ -13,6 +13,9 @@ export const POST = ruta<{ id: string }>({ bucket: 'escritura', max: 120, ventan
   });
   if (!partida) throw noEncontrada();
   if (partida.estado !== 'en_curso') throw new ApiError(409, 'La partida ya finalizó');
+  if (partida.dispositivos === 'multiple') {
+    throw new ApiError(409, 'En esta partida cada equipo se suma con el código desde su dispositivo');
+  }
   if (partida.periodoActual > 0) {
     throw new ApiError(409, 'Los equipos solo se pueden sumar antes de simular la primera ronda');
   }
