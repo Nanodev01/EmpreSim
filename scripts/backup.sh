@@ -2,8 +2,6 @@
 # Copia consistente de SQLite cada cierto intervalo, con compresión y retención por antigüedad.
 set -u
 
-apk add --no-cache sqlite >/dev/null
-
 ORIGEN=/data/simulador.db
 
 while true; do

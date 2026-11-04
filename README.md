@@ -24,14 +24,26 @@ Verificaciones: `npm test`, `npx tsc --noEmit` y `npm run lint`.
 
 ## Puesta en producción
 
-Hace falta un servidor con Docker, los puertos 80 y 443 abiertos y un dominio que apunte a él.
+Las migraciones se aplican solas al iniciar. `docker-compose.yml` levanta la aplicación y los backups sin publicar puertos; hay dos formas de exponerla.
+
+**Con Coolify**
+
+1. Crear el recurso desde el repositorio, con Build Pack *Docker Compose* y el archivo `docker-compose.yml`.
+2. Asignar el dominio al servicio `web`, indicando el puerto: `https://tu-dominio.com:5111`.
+3. Cargar las claves de IA en las variables de entorno, si se van a usar.
+
+Coolify gestiona el HTTPS con su propio proxy, así que Caddy no se usa.
+
+**En un servidor propio, con Caddy**
+
+Hace falta Docker, los puertos 80 y 443 abiertos y un dominio que apunte al servidor.
 
 ```bash
 cp .env.example .env   # definir DOMAIN y, si se quiere, una clave de IA
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
 ```
 
-Caddy obtiene y renueva el certificado HTTPS. Las migraciones se aplican solas al iniciar.
+Caddy obtiene y renueva el certificado HTTPS.
 
 ## Backups
 

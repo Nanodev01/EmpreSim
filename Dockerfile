@@ -55,7 +55,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 # El volumen hereda estos permisos la primera vez que se crea
 RUN mkdir -p /app/data && chown node:node /app/data /app
 
-USER node
+# Sin USER: el entrypoint pasa a "node" después de corregir el dueño del volumen.
 
 EXPOSE 5111
 
