@@ -292,7 +292,7 @@ export class BusinessCoachAI {
     apiKey: string
   ): Promise<FeedbackEquipo> {
     const configurado = process.env.AI_MODEL;
-    const modelo = configurado?.startsWith('gemini') ? configurado : 'gemini-2.5-flash';
+    const modelo = configurado?.startsWith('gemini') ? configurado : 'gemini-3.8-flash';
 
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
       method: 'POST',
