@@ -53,8 +53,8 @@ Para restaurar una copia:
 
 ```bash
 docker compose stop web
-docker compose run --rm --entrypoint sh backup -c \
-  "gunzip -c /backups/ARCHIVO.db.gz > /data/simulador.db && rm -f /data/simulador.db-wal /data/simulador.db-shm && chown 1000:1000 /data/simulador.db"
+docker compose run --rm --no-deps --entrypoint sh backup -c \
+  "gunzip -c /backups/ARCHIVO.db.gz > /data/simulador.db && rm -f /data/simulador.db-wal /data/simulador.db-shm /data/simulador.db-journal && chown 1000:1000 /data/simulador.db"
 docker compose start web
 ```
 
