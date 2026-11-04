@@ -1,6 +1,6 @@
-# Aplicación y backups, sin puertos publicados: la expone un proxy externo.
-# - En Coolify: asignar el dominio al servicio "web" apuntando al puerto 5111.
-# - En un servidor propio: sumar Caddy con docker-compose.caddy.yml (ver README).
+# Aplicación y backups. La aplicación se publica en el puerto 5111 del servidor.
+# - En Coolify: no hace falta asignar un dominio; un túnel o proxy externo puede apuntar a IP:5111.
+# - En un servidor propio: se puede sumar Caddy con docker-compose.caddy.yml (ver README).
 services:
   web:
     build:
@@ -9,8 +9,8 @@ services:
     image: simulando-emprendedores:latest
     container_name: simulando-emprendedores
     restart: unless-stopped
-    expose:
-      - "5111"
+    ports:
+      - "5111:5111"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}

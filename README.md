@@ -24,17 +24,20 @@ Verificaciones: `npm test`, `npx tsc --noEmit` y `npm run lint`.
 
 ## Puesta en producción
 
-Las migraciones se aplican solas al iniciar. `docker-compose.yml` levanta la aplicación y los backups sin publicar puertos; hay dos formas de exponerla.
+Las migraciones se aplican solas al iniciar. `docker-compose.yml` levanta la aplicación y los backups, y publica la aplicación en el puerto 5111 del servidor; hay dos formas de exponerla.
 
-**Con Coolify**
+**Con Coolify y un túnel de Cloudflare**
 
-1. Crear el recurso desde el repositorio, con Build Pack *Docker Compose* y el archivo `docker-compose.yml`.
-2. Asignar el dominio al servicio `web`, indicando el puerto: `https://tu-dominio.com:5111`.
-3. Cargar las claves de IA en las variables de entorno, si se van a usar.
+1. Crear el recurso desde el repositorio, con Build Pack *Docker Compose* y el archivo `docker-compose.yml`. No hace falta asignar un dominio.
+2. Cargar las claves de IA en las variables de entorno, si se van a usar.
+3. Apuntar el túnel a `http://IP-DEL-SERVIDOR:5111`.
 
-Coolify gestiona el HTTPS con su propio proxy, así que Caddy no se usa.
+El túnel gestiona el HTTPS, así que Caddy no se usa.
 
 **En un servidor propio, con Caddy**
+
+El puerto 5111 sigue publicado junto a Caddy: conviene cerrarlo en el firewall para que todo el tráfico pase por HTTPS.
+
 
 Hace falta Docker, los puertos 80 y 443 abiertos y un dominio que apunte al servidor.
 
