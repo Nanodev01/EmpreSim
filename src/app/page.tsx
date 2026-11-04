@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import InstalarApp from './InstalarApp';
 import { 
   Building2, 
   TrendingUp, 
@@ -564,9 +565,11 @@ export default function LobbyPage() {
         </div>
 
         {/* Panel Lateral: Partidas Guardadas y Resumen Didáctico */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="lg:col-span-5 space-y-6 max-lg:contents">
+          <div className="max-lg:order-first empty:hidden"><InstalarApp /></div>
+
           {/* Unirse a una partida */}
-          <form onSubmit={handleUnirse} className="bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-3">
+          <form onSubmit={handleUnirse} className="max-lg:order-first bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-3">
             <h3 className="font-bold text-sm text-white flex items-center gap-2">
               <LogIn className="w-4 h-4 text-emerald-400" />
               ¿Te invitaron a una partida?

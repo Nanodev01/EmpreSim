@@ -9,7 +9,7 @@ Se puede jugar de dos formas:
 
 Quien crea la partida la coordina desde ese navegador. Si lo pierde (otro dispositivo, cookies borradas), la recupera en `/recuperar` con el código de coordinador que se muestra en la partida; el código cambia con cada uso.
 
-Se puede instalar como app (PWA) desde el navegador cuando se sirve por HTTPS. El service worker guarda solo archivos públicos versionados: las páginas y la API siempre van a la red, y sin conexión se muestra un aviso.
+Se puede instalar como app (PWA) desde el navegador cuando se sirve por HTTPS. El service worker guarda solo archivos públicos versionados: las páginas y la API siempre van a la red, y sin conexión se muestra un aviso. El inicio ofrece un botón para instalarla y, en iPhone y iPad, las instrucciones para agregarla a inicio.
 
 ## Desarrollo
 
