@@ -11,56 +11,39 @@ Quien crea la partida la coordina desde ese navegador. Si lo pierde (otro dispos
 
 Se puede instalar como app (PWA) desde el navegador cuando se sirve por HTTPS. El service worker guarda solo archivos públicos versionados: las páginas y la API siempre van a la red, y sin conexión se muestra un aviso. El inicio ofrece un botón para instalarla y, en iPhone y iPad, las instrucciones para agregarla a inicio.
 
-## Desarrollo
+## Historial de commits
 
-```bash
-cp .env.example .env
-npm install
-npx prisma migrate deploy
-npm run dev
-```
-
-Verificaciones: `npm test`, `npx tsc --noEmit` y `npm run lint`.
-
-## Puesta en producción
-
-Las migraciones se aplican solas al iniciar. `docker-compose.yml` levanta la aplicación y los backups, y publica la aplicación en el puerto 5111 del servidor; hay dos formas de exponerla.
-
-**Con Coolify y un túnel de Cloudflare**
-
-1. Crear el recurso desde el repositorio, con Build Pack *Docker Compose* y el archivo `docker-compose.yml`. No hace falta asignar un dominio.
-2. Cargar las claves de IA en las variables de entorno, si se van a usar.
-3. Apuntar el túnel a `http://IP-DEL-SERVIDOR:5111`.
-
-El túnel gestiona el HTTPS, así que Caddy no se usa.
-
-**En un servidor propio, con Caddy**
-
-El puerto 5111 sigue publicado junto a Caddy: conviene cerrarlo en el firewall para que todo el tráfico pase por HTTPS.
-
-
-Hace falta Docker, los puertos 80 y 443 abiertos y un dominio que apunte al servidor.
-
-```bash
-cp .env.example .env   # definir DOMAIN y, si se quiere, una clave de IA
-docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
-```
-
-Caddy obtiene y renueva el certificado HTTPS.
-
-## Backups
-
-El servicio `backup` guarda una copia comprimida cada 6 horas y conserva 14 días (`BACKUP_INTERVALO_SEGUNDOS`, `BACKUP_RETENCION_DIAS`). Las copias quedan en el volumen `simulando_backups`, en el mismo servidor: conviene copiarlas también a otro lugar.
-
-Para restaurar una copia:
-
-```bash
-docker compose stop web
-docker compose run --rm --no-deps --entrypoint sh backup -c \
-  "gunzip -c /backups/ARCHIVO.db.gz > /data/simulador.db && rm -f /data/simulador.db-wal /data/simulador.db-shm /data/simulador.db-journal && chown 1000:1000 /data/simulador.db"
-docker compose start web
-```
-
-## Documentación
-
-- [Historial de commits](docs/historial_commits.md)
+| Commit | Mensaje |
+|--------|---------|
+| `7e90c91` | Initial commit from Create Next App |
+| `38c44fd` | INIT |
+| `97d0ba2` | INIT |
+| `6f9ca78` | chore(main): excluir credenciales y datos locales del repositorio |
+| `d234009` | build(main): actualizar Next.js 15 y React 19 sin vulnerabilidades conocidas |
+| `f768501` | fix(main): aplicar redondeo bancario y validar el motor contra el reporte oficial |
+| `d2731bc` | feat(main): proteger la API con clave anónima de navegador, validación y límites de uso |
+| `f789940` | fix(main): usar claves de IA solo en el servidor y enviarlas al proveedor correcto |
+| `3679b50` | feat(main): cargar decisiones por turnos con tarjetas vacías y finalizar el ciclo por modo |
+| `8a4e026` | fix(main): ajustar la tarjeta de decisiones para campos vacíos y muchos equipos |
+| `d1ae05f` | feat(main): preparar el despliegue en internet con HTTPS, backups y CI |
+| `535b8da` | docs(main): completar el registro de commits e historias de usuario |
+| `bfb3034` | feat(main): mostrar el ranking entre rondas en modo competitivo |
+| `9b15a53` | feat(main): agregar API para unirse a partidas online con código y sin cuentas |
+| `6f3e0fc` | feat(main): agregar sala online y elección entre varios dispositivos o una computadora |
+| `8b07dba` | fix(main): evitar que el encabezado de la partida corte el título en celulares |
+| `755c867` | docs(main): completar los hashes del registro de commits |
+| `2d73dfa` | feat(main): permitir recuperar la coordinación de una partida con un código secreto |
+| `41f7e01` | docs(main): registrar el hash de la recuperación de coordinación |
+| `0305469` | feat(main): permitir instalar la aplicación como PWA |
+| `00d6319` | fix(main): adaptar todas las pantallas a celulares, tablets y escritorio |
+| `cf5162b` | docs(main): registrar los hashes de PWA y diseño adaptable |
+| `e5fab03` | feat(main): ofrecer la instalación y priorizar unirse a una partida en el inicio |
+| `feb95b3` | docs(main): registrar el hash de la instalación desde el inicio |
+| `fba35d4` | fix(main): permitir el despliegue en Coolify sobre volúmenes existentes y con proxy externo |
+| `60d233c` | docs(main): registrar el hash del arreglo de despliegue |
+| `54f454b` | fix(main): restaurar los backups con la aplicación detenida |
+| `2c7c66d` | fix(main): publicar la aplicación en el puerto 5111 del servidor |
+| `1538049` | docs(main): registrar el hash de la publicación del puerto |
+| `aa86140` | fix(main): actualizar el modelo de Gemini por defecto a gemini-3.8-flash |
+| `a097b31` | docs(main): registrar el hash de la actualización del modelo |
+| `67c4cc5` | docs(main): renombrar el registro a historial de commits y quitar las historias de usuario |
