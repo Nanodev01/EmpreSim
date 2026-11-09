@@ -63,4 +63,4 @@ docker compose start web
 
 ## Documentación
 
-- [Registro de commits e historias de usuario](docs/HISTORIAS_DE_USUARIO.md)
+- [Historial de commits](docs/historial_commits.md)
